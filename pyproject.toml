@@ -5,21 +5,47 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "InnoCaptcha"
 version = "0.0.1"
-description = "Python library created by InnoSoft-Company tech team for creating captcha."
+description = "A professional, pluggable CAPTCHA library with image, math, and custom challenge types, token-based security, and multiple storage backends."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [
-  { name = "InnoSoft Company", email = "midoghanam@hotmail.com" },
-  { name = "Mohammed Ahmed Ghanam", email = "midoghanam@hotmail.com" }
+    { name = "InnoSoft Company", email = "midoghanam@hotmail.com" }
 ]
 license = { file = "LICENSE" }
-keywords = ["egypt", "data", "cities", "governorates", "timezone", "phone numbers"]
+keywords = [
+    "captcha",
+    "image",
+    "security",
+    "bot-protection",
+    "text-captcha",
+    "math-captcha",
+    "plugin"
+]
 classifiers = [
-  "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Multimedia :: Graphics",
+    "Typing :: Typed",
 ]
 dependencies = [
+    "Pillow>=10.0.0"
 ]
-[project.scripts]
-egydata = "egydata.cli:main"
+
+[project.urls]
+"Source Code" = "https://github.com/InnoSoft-Company/InnoCaptcha"
+"Bug Tracker" = "https://github.com/InnoSoft-Company/InnoCaptcha/issues"
+"Documentation" = "https://github.com/InnoSoft-Company/InnoCaptcha#readme"
+
+[tool.setuptools]
+packages = { find = {} }
+
+[tool.setuptools.package-data]
+InnoCaptcha = ["data/*.ttf", "data/*.otf"]
