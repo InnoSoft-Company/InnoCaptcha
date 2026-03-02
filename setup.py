@@ -1,8 +1,10 @@
 from setuptools import setup, find_packages
 
+__version__ = "0.1.0"
+
 setup(
   name="InnoCaptcha",
-  version="0.0.1",
+  version=__version__,
   author="InnoSoft Company",
   author_email="midoghanam@hotmail.com",
   description=("A professional, pluggable CAPTCHA library with image, math, and custom challenge types, token-based security, and multiple storage backends."),
