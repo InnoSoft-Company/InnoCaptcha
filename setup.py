@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-__version__ = "0.0.2"
+__version__ = "1.0.0"
 
 setup(
   name="InnoCaptcha",
@@ -18,7 +18,8 @@ setup(
     "Documentation": "https://github.com/InnoSoft-Company/InnoCaptcha#readme",
   },
   packages=find_packages(),
-  package_data={"InnoCaptcha": ["data/*.ttf", "data/*.otf"],},
+  package_data={"InnoCaptcha": ["data/*.ttf", "data/*.otf"],
+},
   entry_points={"console_scripts": ["egydata=egydata.cli:main", ],},
   python_requires=">=3.9",
   install_requires=["Pillow>=10.0.0", ],
@@ -36,5 +37,7 @@ setup(
     "Topic :: Multimedia :: Graphics",
     "Typing :: Typed",
   ],
-  keywords=["captcha", "image", "security", "bot-protection","text-captcha", "math-captcha", "plugin",],
+  keywords=["captcha", "image", "security", "bot-protection",
+"text-captcha", "math-captcha", "plugin",
+],
 )

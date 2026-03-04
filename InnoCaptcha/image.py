@@ -1,196 +1,76 @@
-from PIL.Image import new as createImage, Image, Transform, Resampling
-from PIL.ImageDraw import Draw, ImageDraw
-from PIL.ImageFont import FreeTypeFont, truetype
+import os
+import secrets
+import random
+from PIL import Image, ImageFont
+from PIL.Image import Resampling
+from PIL.ImageDraw import Draw
 from PIL.ImageFilter import SMOOTH
-from io import BytesIO
-import typing as t
-import secrets, os
 
-ColorTuple = t.Union[t.Tuple[int, int, int], t.Tuple[int, int, int, int]]
+font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)))
+font_path = os.path.join(font_dir, 'DroidSansMono.ttf')
+default_font = ImageFont.truetype(font_path, 40)
 
-# Constants
-DATA_DIR = os.path.join(os.path.abspath(os.path.dirname(__file__)))
-DEFAULT_FONTS = [os.path.join(DATA_DIR, 'DroidSansMono.ttf')]
+character_rotate = (-45, 45)
+word_offset_dx = 0.05
+default_width = 300
+default_height = 80
+default_bg_color = (255, 255, 255)
+default_text_color = (0, 0, 0)
 
-# Configurable parameters
-LOOKUP_TABLE = [int(i * 1.97) for i in range(256)]
-CHARACTER_OFFSET_DX = (0, 4)
-CHARACTER_OFFSET_DY = (0, 6)
-CHARACTER_ROTATE = (-30, 30)
-CHARACTER_WARP_DX = (0.1, 0.3)
-CHARACTER_WARP_DY = (0.2, 0.3)
-WORD_SPACE_PROBABILITY = 0.5
-WORD_OFFSET_DX = 0.25
-DEFAULT_WIDTH = 160
-DEFAULT_HEIGHT = 60
-DEFAULT_FONT_SIZES = (42, 50, 56)
+class ImageCaptcha():
+    def __init__(self, chars=None, color=None, background=None, width=None, height=None):
+        self.image_width = width or default_width
+        self.image_height = height or default_height
+        self.background = background or default_bg_color
+        self.text_color = color or default_text_color
+        
+        self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
+        self.draw = Draw(self.image)
+        self.chars = chars
+        
+        self.char_images = []
+    def create(self, chars):
+        for char in chars:
+            temp_image = Image.new('RGBA', (1, 1))
+            temp_draw = Draw(temp_image)
+            left, top, w, h = temp_draw.multiline_textbbox((1, 1), char, font=default_font)
+            
+            im = Image.new('RGBA', (int(w), int(h)))
+            Draw(im).text((0, 0), char, font=default_font, fill=self.text_color)
+            
+            im = im.crop(im.getbbox())
+            
+            angle = character_rotate[0] + (secrets.randbits(32) / (2**32)) * (character_rotate[1] - character_rotate[0])
+            im = im.rotate(angle, Resampling.BILINEAR, expand=True)
+            
+            self.char_images.append(im)
+            
+        for dot in range(30):
+            x1 = secrets.randbelow(self.image_width)
+            y1 = secrets.randbelow(self.image_height)
+            self.draw.line(((x1, y1), (x1 - 1, y1 - 1)), width=3, fill=self.text_color)
+            
+        for curve in range(10):
+            x1 = secrets.randbelow(self.image_width)
+            y1 = secrets.randbelow(self.image_height)
+            x2 = secrets.randbelow(self.image_width)
+            y2 = secrets.randbelow(self.image_height)
+            start = secrets.randbelow(360)
+            end = start + secrets.randbelow(360 - start)
+            
+            x0 = min(x1, x2)
+            y0 = min(y1, y2)
+            x1 = max(x1, x2)
+            y1 = max(y1, y2)
+            self.draw.arc(((x0, y0), (x1, y1)), start, end, fill=self.text_color, width=3)
+        image_width_place_px = 0
+        for im in self.char_images:
+            self.image.paste(im, (image_width_place_px, (self.image_height - im.size[1]) // 2), im)
+            image_width_place_px += im.size[0] + int(self.image_width * word_offset_dx)
 
-# Global cache for loaded fonts
-_truefonts_cache = []
-
-def get_truefonts(fonts=None, font_sizes=None):
-  """Load and return true fonts (cached)."""
-  global _truefonts_cache
-  if _truefonts_cache:
-      return _truefonts_cache
-  
-  fonts = fonts or DEFAULT_FONTS
-  font_sizes = font_sizes or DEFAULT_FONT_SIZES
-  
-  _truefonts_cache = [
-      truetype(n, s)
-      for n in fonts
-      for s in font_sizes
-  ]
-  return _truefonts_cache
-
-def clear_fonts_cache():
-  """Clear the fonts cache."""
-  global _truefonts_cache
-  _truefonts_cache = []
-
-def create_noise_curve(image, color):
-  """Add a random curve noise to the image."""
-  w, h = image.size
-  x1 = secrets.randbelow(int(w / 5) + 1)
-  x2 = secrets.randbelow(w - int(w / 5) + 1) + int(w / 5)
-  y1 = secrets.randbelow(h - 2 * int(h / 5) + 1) + int(h / 5)
-  y2 = secrets.randbelow(h - y1 - int(h / 5) + 1) + y1
-  points = [x1, y1, x2, y2]
-  end = secrets.randbelow(41) + 160
-  start = secrets.randbelow(21)
-  Draw(image).arc(points, start, end, fill=color)
-  return image
-
-def create_noise_dots(image, color, width=3, number=30):
-  """Add random dot noise to the image."""
-  draw = Draw(image)
-  w, h = image.size
-  while number:
-      x1 = secrets.randbelow(w + 1)
-      y1 = secrets.randbelow(h + 1)
-      draw.line(((x1, y1), (x1 - 1, y1 - 1)), fill=color, width=width)
-      number -= 1
-  return image
-
-def draw_character(c, color, fonts=None, font_sizes=None):
-  """Draw a single character with distortion effects."""
-  truefonts = get_truefonts(fonts, font_sizes)
-  font = secrets.choice(truefonts)
-  
-  # Create a temporary image to measure text
-  temp_im = createImage('RGBA', (1, 1))
-  temp_draw = Draw(temp_im)
-  _, _, w, h = temp_draw.multiline_textbbox((1, 1), c, font=font)
-  
-  # Add random offset
-  dx1 = secrets.randbelow(CHARACTER_OFFSET_DX[1] - CHARACTER_OFFSET_DX[0] + 1) + CHARACTER_OFFSET_DX[0]
-  dy1 = secrets.randbelow(CHARACTER_OFFSET_DY[1] - CHARACTER_OFFSET_DY[0] + 1) + CHARACTER_OFFSET_DY[0]
-  
-  # Create image for the character
-  im = createImage('RGBA', (int(w) + dx1, int(h) + dy1))
-  Draw(im).text((dx1, dy1), c, font=font, fill=color)
-  
-  # Crop and rotate
-  im = im.crop(im.getbbox())
-  angle = CHARACTER_ROTATE[0] + (secrets.randbits(32) / (2**32)) * (CHARACTER_ROTATE[1] - CHARACTER_ROTATE[0])
-  im = im.rotate(angle, Resampling.BILINEAR, expand=True)
-  
-  # Warp effect
-  dx2 = w * (secrets.randbits(32) / (2**32)) * (CHARACTER_WARP_DX[1] - CHARACTER_WARP_DX[0]) + CHARACTER_WARP_DX[0]
-  dy2 = h * (secrets.randbits(32) / (2**32)) * (CHARACTER_WARP_DY[1] - CHARACTER_WARP_DY[0]) + CHARACTER_WARP_DY[0]
-  
-  x1 = int(secrets.randbits(32) / (2**32) * (dx2 - (-dx2)) + (-dx2))
-  y1 = int(secrets.randbits(32) / (2**32) * (dy2 - (-dy2)) + (-dy2))
-  x2 = int(secrets.randbits(32) / (2**32) * (dx2 - (-dx2)) + (-dx2))
-  y2 = int(secrets.randbits(32) / (2**32) * (dy2 - (-dy2)) + (-dy2))
-  
-  w2 = w + abs(x1) + abs(x2)
-  h2 = h + abs(y1) + abs(y2)
-  data = (
-      x1, y1,
-      -x1, h2 - y2,
-      w2 + x2, h2 + y2,
-      w2 - x2, -y1,
-  )
-  
-  im = im.resize((w2, h2))
-  im = im.transform((int(w), int(h)), Transform.QUAD, data)
-  return im
-
-def create_captcha_image(chars, color, background, width=None, height=None, fonts=None, font_sizes=None):
-  """Create the CAPTCHA image with text."""
-  width = width or DEFAULT_WIDTH
-  height = height or DEFAULT_HEIGHT
-  
-  # Create background
-  image = createImage('RGB', (width, height), background)
-  draw = Draw(image)
-  
-  # Draw each character
-  images = []
-  for c in chars:
-      if secrets.randbits(32) / (2**32) > WORD_SPACE_PROBABILITY:
-          images.append(draw_character(" ", color, fonts, font_sizes))
-      images.append(draw_character(c, color, fonts, font_sizes))
-  
-  # Calculate total text width
-  text_width = sum([im.size[0] for im in images])
-  
-  # Resize if text is wider than image
-  width = max(text_width, width)
-  image = image.resize((width, height))
-  
-  # Position characters with random offsets
-  average = int(text_width / len(chars))
-  rand = int(WORD_OFFSET_DX * average)
-  offset = int(average * 0.1)
-  
-  for im in images:
-      w, h = im.size
-      mask = im.convert('L').point(LOOKUP_TABLE)
-      image.paste(im, (offset, int((height - h) / 2)), mask)
-      offset = offset + w + (-secrets.randbelow(rand + 1))
-  
-  # Resize back to original width if needed
-  if width > width:
-      image = image.resize((width, height))
-  
-  return image
-
-def random_color(start, end, opacity=None):
-  """Generate a random color."""
-  red = secrets.randbelow(end - start + 1) + start
-  green = secrets.randbelow(end - start + 1) + start
-  blue = secrets.randbelow(end - start + 1) + start
-  if opacity is None:
-      return red, green, blue
-  return red, green, blue, opacity
-
-def generate_captcha_image(chars, bg_color=None, fg_color=None, width=None, height=None, fonts=None, font_sizes=None):
-  """Generate the complete CAPTCHA image."""
-  background = bg_color if bg_color else random_color(238, 255)
-  random_fg_color = random_color(10, 200, secrets.randbelow(36) + 220)
-  color = fg_color if fg_color else random_fg_color
-  
-  im = create_captcha_image(chars, color, background, width, height, fonts, font_sizes)
-  create_noise_dots(im, color)
-  create_noise_curve(im, color)
-  im = im.filter(SMOOTH)
-  return im
-
-def generate_captcha_bytes(chars, format='png', bg_color=None, fg_color=None, width=None, height=None, fonts=None, font_sizes=None):
-  """Generate CAPTCHA and return as bytes."""
-  im = generate_captcha_image(chars, bg_color, fg_color, width, height, fonts, font_sizes)
-  out = BytesIO()
-  im.save(out, format=format)
-  out.seek(0)
-  return out
-
-def generate_captcha(chars, path=None, format='png', bg_color=None, fg_color=None, width=None, height=None, fonts=None, font_sizes=None):
-  im = generate_captcha_image(chars, bg_color, fg_color, width, height, fonts, font_sizes)
-  directory = path if path else os.getcwd()
-  os.makedirs(directory, exist_ok=True)
-  file_path = os.path.join(directory, f"captcha.{format}")
-  im.save(file_path, format=format)
-  return {"file_path": file_path, "chars": chars}
+        self.image = self.image.filter(SMOOTH)
+        self.chars = chars
+    def save(self, path):
+        self.image.save(path)
+    def verify(self, user_input):
+        return user_input == self.chars

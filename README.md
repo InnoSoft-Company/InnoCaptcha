@@ -96,80 +96,55 @@ Quick Start
 
 Image CAPTCHA Generation
 
-Generate custom image-based CAPTCHA with configurable text, colors, size, and fonts.
+Generate custom image-based CAPTCHA with configurable text, colors, and image dimensions.
 
 ```python
-from InnoCaptcha.image import generate_captcha
+from InnoCaptcha.image import ImageCaptcha
 
 # Generate a simple CAPTCHA and save it to the current directory
-result = generate_captcha("A1b2C3")
-print(result)  # {'file_path': '/current/path/captcha.png', 'chars': 'A1b2C3'}
+img = ImageCaptcha()
+img.create("abs")
+print(img.verify("abs"))  # True
+img.save(r"C:\path\to\image\captcha.png")
 
-# Save to a specific folder with custom colors and size
-result = generate_captcha(
-    chars="7Xk9P",
-    path="/tmp/captchas",
-    format="png",
-    bg_color=(255, 255, 255),      # white background
-    fg_color=(50, 150, 200),        # blue text
-    width=240,
-    height=80
+# Use custom attributes
+img = ImageCaptcha(
+    width=350, 
+    height=100, 
+    color=(255, 137, 6), 
+    background=(15, 14, 23)
 )
+img.create("abc123")
+print(img.verify("asd"))  # False
+img.save(r"C:\path\to\image\captcha.jpg")
 ```
 
 ---
 
-generate_captcha()
+ImageCaptcha()
 
-Parameter Type Default Description
-chars str required The text to render in the CAPTCHA image.
-path str or None None Directory where the image will be saved. If None, saves to the current working directory.
-format str 'png' Image format (e.g., 'png', 'jpeg', 'gif').
-bg_color tuple of 3 int (RGB) or None random light color Background color. If None, a random light color is chosen.
-fg_color tuple of 3 or 4 int (RGB/RGBA) or None random dark color Foreground (text) color. If None, a random semi‑transparent dark color is generated.
-width int or None 160 Image width in pixels. If None, uses default (160).
-height int or None 60 Image height in pixels. If None, uses default (60).
-fonts list of font paths or None built‑in fonts List of TrueType font file paths to use for text rendering.
-font_sizes tuple of int or None (42, 50, 56) Font sizes to randomly pick from.
-
-Returns a dictionary:
-
-```python
-{
-    'file_path': str,   # full path to the saved image file
-    'chars': str        # the original text that was rendered
-}
-```
-
----
-
-Additional Functions
-
-· generate_captcha_image(chars, ...) – returns a PIL.Image object instead of saving it.
-· generate_captcha_bytes(chars, ...) – returns an in‑memory bytes buffer of the image (useful for serving directly over HTTP).
-
-Example using generate_captcha_bytes:
-
-```python
-from InnoCaptcha.image import generate_captcha_bytes
-from flask import send_file
-
-buffer = generate_captcha_bytes("XyZ12")
-return send_file(buffer, mimetype='image/png')
-```
+Parameter Type Default Description:
+- chars str required The text to render in the CAPTCHA image.
+- path str Directory where the image will be saved. If None, returns an error.
+- format str 'png' Image format (default).
+- background tuple of 3 int (RGB) or None white color Background color.
+- color tuple of 3 int (RGB) or None black color Foreground (text) color.
+- width int or None 300 Image width in pixels. If None, uses default (300).
+- height int or None 80 Image height in pixels. If None, uses default (80).
 
 ---
 
 Notes
 
-· All CAPTCHA images include random distortions (curve, dots, character warping) and anti‑aliasing for better security.
+· All CAPTCHA images include random distortions (curve, dots) and anti‑aliasing for better security.
 · The module uses secrets for cryptographically strong randomness.
-· For advanced customization, you can pass your own fonts (list of .ttf file paths) and fine‑tune rendering via the module‑level constants (CHARACTER_OFFSET_DX, WORD_SPACE_PROBABILITY, etc.).
+· For advanced customization, you can fine‑tune the rendering behavior using module-level constants such as `CHARACTER_OFFSET_DX`, `WORD_SPACE_PROBABILITY`, and others.
 ---
 
 Requirements
 
-· Python 3.9 or later (uses standard library zoneinfo; for Python 3.8 you may need the backports.zoneinfo package).
+· Python 3.9 or later.
+· Pillow >= 10.0.0
 
 ---
 
