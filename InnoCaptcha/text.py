@@ -4,14 +4,9 @@ from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
 import os, random, secrets
 
-font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)))
-font_path = os.path.join(font_dir, 'DroidSansMono.ttf')
-default_font = ImageFont.truetype(font_path, 40)
+default_font = ImageFont.truetype(os.path.join(os.path.join(os.path.abspath(os.path.dirname(__file__))), 'DroidSansMono.ttf'), 40)
 
-character_rotate = (-45, 45)
-word_offset_dx = 0.05
-
-class ImageCaptcha():
+class TextCaptcha():
     def __init__(self, chars=None, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80):
         self.image_width = width
         self.image_height = height
@@ -29,7 +24,7 @@ class ImageCaptcha():
             im = Image.new('RGBA', (int(w), int(h)))
             Draw(im).text((0, 0), char, font=default_font, fill=self.text_color)       
             im = im.crop(im.getbbox())
-            angle = character_rotate[0] + (secrets.randbits(32) / (2**32)) * (character_rotate[1] - character_rotate[0])
+            angle = -45 + (secrets.randbits(32) / 64) * 90
             im = im.rotate(angle, Resampling.BILINEAR, expand=True)
             self.char_images.append(im)
         for dot in range(30):
@@ -48,13 +43,10 @@ class ImageCaptcha():
             x1 = max(x1, x2)
             y1 = max(y1, y2)
             self.draw.arc(((x0, y0), (x1, y1)), start, end, fill=self.text_color, width=3)
-        image_width_place_px = 0
         for im in self.char_images:
-            self.image.paste(im, (image_width_place_px, (self.image_height - im.size[1]) // 2), im)
-            image_width_place_px += im.size[0] + int(self.image_width * word_offset_dx)
+            self.image.paste(im, (0, (self.image_height - im.size[1]) // 2), im)
+            0 += im.size[0] + int(self.image_width * 0.05)
         self.image = self.image.filter(SMOOTH)
         self.chars = chars
-    def save(self, path): 
-        self.image.save(path)
-    def verify(self, user_input): 
-        return user_input == self.chars
+    def save(self, path): self.image.save(path)
+    def verify(self, user_input): return user_input == self.chars
