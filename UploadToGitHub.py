@@ -1,24 +1,35 @@
+import subprocess, os, pytz, sys
 from datetime import datetime
-import os, pytz
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-project = "InnoCaptcha"
-branch = "main"
+PROJECT, REMOTE_NAME = "InnoCaptcha", "origin"
+REMOTE_URL = f"https://github.com/InnoSoft-Company/{PROJECT}.git"
 
-try:
-  if input("Did you have a git repo installed? (y/n): ").lower()[0] == "n":
-    os.system(f'''git init && \
-    git remote add origin https://github.com/InnoSoft-Company/{project}.git ''')
-except: pass
+def run(cmd):
+  if subprocess.run(cmd, shell=True).returncode != 0: sys.exit(1) 
 
-q = input("Adding a commit message? (Skip avilable): ")
+def repo_exists(): return os.path.isdir(".git")
 
-os.system(f'''
-git add . && \
-git commit -m "{datetime.now(pytz.timezone("Africa/Cairo")).strftime("%d-%m-%Y | %H:%M:%S")}{ f' | {q}' if q else '' }" && \
-git branch -M main && \
-git push https://github.com/InnoSoft-Company/{project}.git {branch} --force
-''')
+def remote_exists():
+  try:
+    subprocess.check_output("git remote", shell=True)
+    return REMOTE_NAME in subprocess.check_output("git remote", shell=True).decode()
+  except: return False
+
+def get_current_branch(): return subprocess.check_output("git branch --show-current", shell=True).decode().strip() or "main"
+
+if not repo_exists(): run("git init")
+if not remote_exists(): run(f"git remote add {REMOTE_NAME} {REMOTE_URL}")
+
+if not bool(subprocess.check_output("git status --porcelain", shell=True).decode().strip()):
+  print("No changes to commit.")
+  sys.exit(0)
+commit = input("Commit message (optional): ").strip()
+run("git add .")
+run(f'git commit -m "{datetime.now(pytz.timezone("Africa/Cairo")).strftime("%d-%m-%Y | %H:%M:%S")}{f" | {commit}" if commit else ""}"')
+branch = get_current_branch()
+run(f"git pull {REMOTE_NAME} {branch}")
+run(f"git push {REMOTE_NAME} {branch}")
 
 #git clone https://github.com/InnoSoft-Company/InnoCaptcha
