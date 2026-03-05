@@ -78,25 +78,24 @@
 | **Closed PRs** | [![GitHub pull requests-closed](https://img.shields.io/github/issues-pr-closed/InnoSoft-Company/InnoCaptcha)](https://github.com/InnoSoft-Company/InnoCaptcha/pulls?q=is%3Apr+is%3Aclosed) |
 | **Milestones** | [![GitHub milestones](https://img.shields.io/github/milestones/open/InnoSoft-Company/InnoCaptcha)](https://github.com/InnoSoft-Company/InnoCaptcha/milestones) |
 
-Structured Egyptian geographical and timezone data for Python.
-
-Provides a complete, offline dataset of Egyptian governorates, cities, landline and mobile area codes, and timezone utilities — with zero dependencies (uses Python standard library only).
+A professional, pluggable CAPTCHA library with image, math, and custom challenge types, token-based security, and multiple storage backends.
 
 [View on GitHub](https://github.com/InnoSoft-Company/InnoCaptcha) | [View on PyPI](https://pypi.org/project/InnoCaptcha/)
 
 ---
-
-## Installation
+Installation
 
 ```bash
 pip install InnoCaptcha
 ```
 
+---
+
 Quick Start
 
-Image CAPTCHA Generation
+1. Image CAPTCHA
 
-Generate custom image-based CAPTCHA with configurable text, colors, and image dimensions.
+Generate custom image-based CAPTCHA with configurable text, colors, and dimensions.
 
 ```python
 from InnoCaptcha.image import ImageCaptcha
@@ -119,18 +118,61 @@ print(img.verify("asd"))  # False
 img.save(r"C:\path\to\image\captcha.jpg")
 ```
 
+ImageCaptcha Parameters
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| chars | str (required) | – | The text to render in the CAPTCHA image. |
+| path | str or None | None | Directory to save the image. If None, saving raises an error. |
+| format | str | 'png' | Image format (e.g., 'png', 'jpg'). |
+| background | tuple of 3 int (RGB) or None | (255,255,255) (white) | Background color. |
+| color | tuple of 3 int (RGB) or None | (0,0,0) (black) | Foreground (text) color. |
+| width | int or None | 300 | Image width in pixels. |
+| height | int or None | 80 | Image height in pixels. |
+
+Notes:
+
+· All CAPTCHA images include random distortions (curve, dots) and anti‑aliasing for better security.
+· The module uses secrets for cryptographically strong randomness.
+· For advanced customization, you can fine‑tune the rendering behavior using module‑level constants such as CHARACTER_OFFSET_DX, WORD_SPACE_PROBABILITY, etc.
+
 ---
 
-ImageCaptcha()
+2. Math CAPTCHA
 
-Parameter Type Default Description:
-- chars str required The text to render in the CAPTCHA image.
-- path str Directory where the image will be saved. If None, returns an error.
-- format str 'png' Image format (default).
-- background tuple of 3 int (RGB) or None white color Background color.
-- color tuple of 3 int (RGB) or None black color Foreground (text) color.
-- width int or None 300 Image width in pixels. If None, uses default (300).
-- height int or None 80 Image height in pixels. If None, uses default (80).
+Generate simple arithmetic challenges (addition, subtraction, multiplication, division) that always yield integer results.
+
+```python
+from InnoCaptcha.math import MathCaptcha
+
+# Create a new math challenge
+m = MathCaptcha()
+print(m.get_question())   # e.g., "7+3 = ?"
+print(m.answer)           # e.g., 10
+
+# Verify an answer
+print(m.verify(10))       # True
+print(m.verify("10"))     # True (string comparison works)
+```
+
+The MathCaptcha class automatically regenerates a problem until the result is an integer (no fractions).
+It uses random for operator and operand selection.
+
+---
+
+3. Command‑Line Interface (CLI)
+
+InnoCaptcha includes a handy CLI tool to check the version and upgrade the package.
+
+```bash
+# Show current version
+incaptcha --version
+
+# Upgrade to the latest version on PyPI
+incaptcha --upgrade
+```
+
+The CLI is implemented in InnoCaptcha.cli and uses argparse and subprocess to run pip install --upgrade.
 
 ---
 
