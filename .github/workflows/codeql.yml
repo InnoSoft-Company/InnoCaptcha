@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: ["main"]
   schedule:
-    - cron: '0 0,6,12,18 * * *' 
-  
+    - cron: '0 0,6,12,18 * * *' # منتصف الليل، 6 صباحًا، 12 ظهرًا، 6 مساءً
+
 jobs:
   analyze:
     name: CodeQL Analysis + Auto Issue
@@ -36,7 +36,10 @@ jobs:
     - name: Create Super Super Issues for Each Alert
       if: always()
       run: |
-        ALERTS_JSON=$(gh codeql alerts list --repo $GITHUB_REPOSITORY --state open --format json)
+        # جلب الـ alerts المفتوحة من GitHub API
+        ALERTS_JSON=$(curl -s -H "Accept: application/vnd.github+json" \
+                           -H "Authorization: token $GITHUB_TOKEN" \
+                           https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts)
         ALERT_COUNT=$(echo "$ALERTS_JSON" | jq length)
         if [ "$ALERT_COUNT" -eq 0 ]; then
           echo "No new CodeQL alerts."
