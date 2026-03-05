@@ -24,7 +24,7 @@ class TextCaptcha():
             im = Image.new('RGBA', (int(w), int(h)))
             Draw(im).text((0, 0), char, font=default_font, fill=self.text_color)       
             im = im.crop(im.getbbox())
-            angle = -45 + (secrets.randbits(32) / 64) * 90
+            angle = -45 + (secrets.randbits(32) / (2**32)) * (45 - (-45))
             im = im.rotate(angle, Resampling.BILINEAR, expand=True)
             self.char_images.append(im)
         for dot in range(30):
@@ -43,10 +43,13 @@ class TextCaptcha():
             x1 = max(x1, x2)
             y1 = max(y1, y2)
             self.draw.arc(((x0, y0), (x1, y1)), start, end, fill=self.text_color, width=3)
+        x = 0
         for im in self.char_images:
-            self.image.paste(im, (0, (self.image_height - im.size[1]) // 2), im)
-            0 += im.size[0] + int(self.image_width * 0.05)
+            self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
+            x += im.size[0] + int(self.image_width * 0.05)
         self.image = self.image.filter(SMOOTH)
         self.chars = chars
-    def save(self, path): self.image.save(path)
-    def verify(self, user_input): return user_input == self.chars
+    def save(self, path):
+        self.image.save(path)
+    def verify(self, user_input): 
+        return user_input == self.chars

@@ -93,21 +93,21 @@ pip install InnoCaptcha
 
 Quick Start
 
-1. Image CAPTCHA
+1. Text CAPTCHA
 
 Generate custom image-based CAPTCHA with configurable text, colors, and dimensions.
 
 ```python
-from InnoCaptcha.image import ImageCaptcha
+from InnoCaptcha.text import TextCaptcha
 
 # Generate a simple CAPTCHA and save it to the current directory
-img = ImageCaptcha()
+img = TextCaptcha()
 img.create("abs")
 print(img.verify("abs"))  # True
 img.save(r"C:\path\to\image\captcha.png")
 
 # Use custom attributes
-img = ImageCaptcha(
+img = TextCaptcha(
     width=350, 
     height=100, 
     color=(255, 137, 6), 
