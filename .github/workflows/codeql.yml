@@ -1,0 +1,70 @@
+name: "CodeQL Ultra Super + Auto Issue"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: '0 0,6,12,18 * * *' 
+  
+jobs:
+  analyze:
+    name: CodeQL Analysis + Auto Issue
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+      packages: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: python
+        build-mode: none
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4
+      with:
+        category: "/language:python"
+
+    - name: Create Super Super Issues for Each Alert
+      if: always()
+      run: |
+        ALERTS_JSON=$(gh codeql alerts list --repo $GITHUB_REPOSITORY --state open --format json)
+        ALERT_COUNT=$(echo "$ALERTS_JSON" | jq length)
+        if [ "$ALERT_COUNT" -eq 0 ]; then
+          echo "No new CodeQL alerts."
+          exit 0
+        fi
+
+        echo "Found $ALERT_COUNT alerts, creating individual issues..."
+        for i in $(seq 0 $(($ALERT_COUNT - 1))); do
+          TITLE=$(echo "$ALERTS_JSON" | jq -r ".[$i].rule.name")
+          FILE=$(echo "$ALERTS_JSON" | jq -r ".[$i].instances[0].location.path // \"Unknown\"")
+          LINE=$(echo "$ALERTS_JSON" | jq -r ".[$i].instances[0].location.start_line // \"Unknown\"")
+          SEVERITY=$(echo "$ALERTS_JSON" | jq -r ".[$i].rule.severity // \"medium\"")
+          ALERT_ID=$(echo "$ALERTS_JSON" | jq -r ".[$i].number")
+          ALERT_URL="https://github.com/$GITHUB_REPOSITORY/security/code-scanning/alerts/$ALERT_ID"
+
+          # Skip if an issue with the same title already exists
+          EXISTING=$(gh issue list --repo $GITHUB_REPOSITORY --search "$TITLE" --json number --jq '.[].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue for '$TITLE' already exists, skipping."
+            continue
+          fi
+
+          BODY="CodeQL detected an issue in **$FILE** at line **$LINE**.\n\nRule: $TITLE\nSeverity: $SEVERITY\n\n[View Alert in GitHub Security Tab]($ALERT_URL)\n\n*Generated automatically by CodeQL Ultra Super Workflow*"
+
+          gh issue create \
+            --title "CodeQL Alert: $TITLE" \
+            --body "$BODY" \
+            --labels "security,bug,$SEVERITY"
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
