@@ -19,11 +19,13 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: python
           build-mode: none
+
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
@@ -33,24 +35,33 @@ jobs:
         if: always()
         run: |
           set -e
-          # جلب الـ alerts المفتوحة
+
           ALERTS_JSON=$(curl -s -H "Accept: application/vnd.github+json" \
                              -H "Authorization: token $GITHUB_TOKEN" \
                              https://api.github.com/repos/$GITHUB_REPOSITORY/code-scanning/alerts)
-          ALERT_COUNT=$(echo "$ALERTS_JSON" | jq length)
+          
+          # لو فيه مفتاح alerts، نستخدمه
+          ALERTS=$(echo "$ALERTS_JSON" | jq '.alerts // []')
+          ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
+
+          if [ "$ALERT_COUNT" -eq 0 ]; then
+            echo "No new CodeQL alerts."
+            exit 0
+          fi
+
           for i in $(seq 0 $(($ALERT_COUNT - 1))); do
-            TITLE=$(echo "$ALERTS_JSON" | jq -r ".[$i].rule.name")
-            FILE=$(echo "$ALERTS_JSON" | jq -r ".[$i].instances[0].location.path // \"Unknown\"")
-            LINE=$(echo "$ALERTS_JSON" | jq -r ".[$i].instances[0].location.start_line // \"Unknown\"")
-            SEVERITY=$(echo "$ALERTS_JSON" | jq -r ".[$i].rule.severity // \"medium\"")
-            ALERT_ID=$(echo "$ALERTS_JSON" | jq -r ".[$i].number")
+            TITLE=$(echo "$ALERTS" | jq -r ".[$i].rule.name")
+            FILE=$(echo "$ALERTS" | jq -r ".[$i].instances[0].location.path // \"Unknown\"")
+            LINE=$(echo "$ALERTS" | jq -r ".[$i].instances[0].location.start_line // \"Unknown\"")
+            SEVERITY=$(echo "$ALERTS" | jq -r ".[$i].rule.severity // \"medium\"")
+            ALERT_ID=$(echo "$ALERTS" | jq -r ".[$i].number")
             ALERT_URL="https://github.com/$GITHUB_REPOSITORY/security/code-scanning/alerts/$ALERT_ID"
 
             EXISTING=$(gh issue list --repo $GITHUB_REPOSITORY --search "$TITLE" --json number --jq '.[].number')
             if [ -n "$EXISTING" ]; then continue; fi
 
             BODY="CodeQL detected an issue in **$FILE** at line **$LINE**.\n\nRule: $TITLE\nSeverity: $SEVERITY\n\n[View Alert]($ALERT_URL)"
-            gh issue create --title "CodeQL Alert: $TITLE" --body "$BODY" --labels "security,bug,$SEVERITY"
+            gh issue create --title "CodeQL Alert: $TITLE" --body "$BODY" -l "security,bug,$SEVERITY"
           done
 
       - name: Report failure as Issue
@@ -60,6 +71,6 @@ jobs:
           gh issue create \
             --title "CodeQL Workflow Failure" \
             --body "$BODY" \
-            --labels "bug,failure"
+            -l "bug,failure"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
