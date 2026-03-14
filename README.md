@@ -108,10 +108,10 @@ print(challenge.verify("10"))    # True — string input accepted
 
 ```bash
 # Display the installed version
-incaptcha --version
+InnoCaptcha --version
 
 # Upgrade to the latest release on PyPI
-incaptcha --upgrade
+InnoCaptcha --upgrade
 ```
 
 ---
