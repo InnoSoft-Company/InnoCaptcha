@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-__version__ = "1.1.1"
+__version__ = "1.2.0"
 
 setup(
   name="InnoCaptcha",
@@ -18,7 +18,7 @@ setup(
     "Documentation": "https://github.com/InnoSoft-Company/InnoCaptcha#readme",
   },
   packages=find_packages(),
-  package_data={"InnoCaptcha": ["data/*.*", "*.*"],
+  package_data={"InnoCaptcha": ["*.ttf", "*.otf"],
 },
   entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main", ],},
   python_requires=">=3.9",

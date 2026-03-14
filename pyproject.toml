@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "InnoCaptcha"
-version = "1.1.1"
+version = "1.2.0"
 description = "A professional, pluggable CAPTCHA library with image, math, and custom challenge types, token-based security, and multiple storage backends."
 readme = "README.md"
 requires-python = ">=3.9"
