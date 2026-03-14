@@ -20,7 +20,7 @@ setup(
   packages=find_packages(),
   package_data={"InnoCaptcha": ["data/*.ttf", "data/*.otf"],
 },
-  entry_points={"console_scripts": ["egydata=egydata.cli:main", ],},
+  entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main", ],},
   python_requires=">=3.9",
   install_requires=["Pillow>=10.0.0", ],
   classifiers=[
@@ -37,7 +37,5 @@ setup(
     "Topic :: Multimedia :: Graphics",
     "Typing :: Typed",
   ],
-  keywords=["captcha", "image", "security", "bot-protection",
-"text-captcha", "math-captcha", "plugin",
-],
+  keywords=["captcha", "image", "security", "bot-protection", "text-captcha", "math-captcha", "plugin",],
 )
