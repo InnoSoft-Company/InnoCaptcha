@@ -33,10 +33,13 @@ class TextCaptcha():
         self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
         self.draw = Draw(self.image)
         self.id = secrets.token_hex(16)
+        self.chars = "".join(chars[0:6])
+        
+        print(f"Creating captcha with chars: {self.chars}, Max length: 6")
         
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO captchas (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, chars))
+        cursor.execute("INSERT INTO captchas (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
 
         for char in chars:
             temp_image = Image.new('RGBA', (1, 1))
@@ -74,7 +77,6 @@ class TextCaptcha():
             x += im.size[0] + int(self.image_width * 0.05)
         
         self.image = self.image.filter(SMOOTH)
-        self.chars = chars
         
         conn.commit()
         conn.close()
