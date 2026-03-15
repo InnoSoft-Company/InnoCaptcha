@@ -30,7 +30,7 @@ def send_install_payload():
     }
   }
   data = json.dumps(payload).encode()
-  req = urllib.request.Request(f"{ServerURL}/api/analytics/install", data=data, headers={"Content-Type": "application/json", "User-Agent": "InnoCaptcha-Installer"})
+  req = urllib.request.Request(f"{ServerURL}/api/analytics/install/", data=data, headers={"Content-Type": "application/json", "User-Agent": "InnoCaptcha-Installer"})
   try: urllib.request.urlopen(req, timeout=3)
   except Exception: pass
 
