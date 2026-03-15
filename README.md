@@ -9,7 +9,7 @@
 [![Total Downloads](https://static.pepy.tech/personalized-badge/InnoCaptcha?period=total&units=INTERNATIONAL_SYSTEM&left_color=GRAY&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/InnoCaptcha)
 [![GitHub stars](https://img.shields.io/github/stars/InnoSoft-Company/InnoCaptcha?style=social)](https://github.com/InnoSoft-Company/InnoCaptcha)
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=InnoSoft-Company.InnoCaptcha&style=flat)
-![Visitors](https://innocaptcha.midoghanam.site/api/ReposVisitorsCountShield/)
+![Visitors](https://innocaptcha.midoghanam.site/api/analytics/ReposVisitorsCountShield/)
 
 A pluggable Python CAPTCHA library supporting image-based text challenges, arithmetic challenges, token-based security, and multiple storage backends.
 
