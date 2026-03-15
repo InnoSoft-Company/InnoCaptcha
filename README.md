@@ -11,7 +11,7 @@
 ![Visitors](https://visitor-badge.laobi.icu/badge?page_id=InnoSoft-Company.InnoCaptcha&style=flat)
 ![Visitors](https://innocaptcha.midoghanam.site/api/analytics/ReposVisitorsCountShield/)
 
-A pluggable Python CAPTCHA library supporting image-based text challenges, arithmetic challenges, token-based security, and multiple storage backends.
+A pluggable Python CAPTCHA library supporting image-based text challenges, arithmetic challenges, audio challenges, token-based security, and multiple storage backends.
 
 **[PyPI](https://pypi.org/project/InnoCaptcha/) · [GitHub](https://github.com/InnoSoft-Company/InnoCaptcha) · [Issues](https://github.com/InnoSoft-Company/InnoCaptcha/issues) · [Discussions](https://github.com/InnoSoft-Company/InnoCaptcha/discussions)**
 
@@ -23,7 +23,8 @@ A pluggable Python CAPTCHA library supporting image-based text challenges, arith
 - [Quick Start](#quick-start)
   - [Text CAPTCHA](#1-text-captcha)
   - [Math CAPTCHA](#2-math-captcha)
-  - [Command-Line Interface](#3-command-line-interface)
+  - [Audio CAPTCHA](#3-audio-captcha)
+  - [Command-Line Interface](#4-command-line-interface)
 - [API Reference](#api-reference)
 - [Requirements](#requirements)
 - [License](#license)
@@ -105,7 +106,46 @@ print(challenge.verify("10"))    # True — string input accepted
 
 ---
 
-### 3. Command-Line Interface
+### 3. Audio CAPTCHA
+
+Generates a spoken character sequence as a WAV file. Each character is spliced from pre-recorded audio samples stored in the `data/` directory, with per-character noise injection, randomized playback speed, and a low-pass filter applied to the combined output. Challenge state is persisted in SQLite with a 5-minute expiry and a 5-attempt limit.
+
+```python
+from InnoCaptcha.audio import AudioCaptcha
+
+# Basic usage
+captcha = AudioCaptcha()
+captcha.create("ab3")
+captcha.save("captcha.wav")
+
+print(captcha.verify("ab3"))    # True
+print(captcha.verify("wrong"))  # False
+```
+
+**`create(chars: str)`** — Accepts up to 6 characters. Each character must have a corresponding `<char>.wav` file in the `data/` directory. Raises `FileNotFoundError` if any file is missing.
+
+**`save()` Parameters**
+
+| Parameter | Type  | Default | Description                                     |
+|-----------|-------|---------|-------------------------------------------------|
+| `path`    | `str` | —       | Full file path to write the output WAV file.    |
+
+**`verify(user_input: str) -> bool or str`**
+
+| Return value                      | Condition                                                    |
+|-----------------------------------|--------------------------------------------------------------|
+| `True`                            | Input matches the stored answer (case-insensitive).          |
+| `False`                           | Input does not match; attempt counter incremented.           |
+| `str` (error message)             | Captcha expired or maximum attempts (5) reached.             |
+
+> **Notes:**
+> - Uses `secrets` for randomness in noise generation and speed variation.
+> - A background thread runs on instantiation to purge expired records from the database.
+> - Output is a 44100 Hz, 16-bit, mono WAV file.
+
+---
+
+### 4. Command-Line Interface
 
 ```bash
 # Display the installed version
@@ -135,12 +175,24 @@ InnoCaptcha --upgrade
 | `answer: int`           | The correct integer answer to the current challenge.  |
 | `verify(input) -> bool` | Returns `True` if `input` equals the answer.          |
 
+### `AudioCaptcha`
+
+| Method / Attribute      | Description                                                                      |
+|-------------------------|----------------------------------------------------------------------------------|
+| `create(chars: str)`    | Builds the audio challenge from up to 6 characters using per-character WAV files.|
+| `verify(input: str)`    | Returns `True` on match, `False` on mismatch, or a `str` on expiry/lockout.     |
+| `save(path: str)`       | Writes the generated audio to a 44100 Hz 16-bit mono WAV file.                  |
+| `id: str`               | The hex token identifying this challenge in the database.                        |
+| `audio: np.ndarray`     | Raw float32 audio samples; `None` until `create()` is called.                   |
+
 ---
 
 ## Requirements
 
 - Python 3.9 or later
 - Pillow >= 10.0.0
+- numpy
+- scipy
 
 ---
 
