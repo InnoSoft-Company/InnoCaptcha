@@ -48,7 +48,7 @@ dependencies = [
 packages = { find = {} }
 
 [tool.setuptools.package-data]
-InnoCaptcha = ["data/*.ttf", "data/*.otf"]
+InnoCaptcha = ["*.ttf", "*.otf"]
 
 [project.scripts]
 InnoCaptcha = "InnoCaptcha.cli:main"
