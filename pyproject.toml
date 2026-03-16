@@ -17,8 +17,7 @@ keywords = [
     "image",
     "security",
     "bot-protection",
-    "text-captcha",
-    "math-captcha",
+    "text-captcha", "math-captcha", 'audio-captcha', 
     "plugin"
 ]
 classifiers = [
@@ -48,7 +47,7 @@ dependencies = [
 packages = { find = {} }
 
 [tool.setuptools.package-data]
-InnoCaptcha = ["*.ttf", "*.otf"]
+InnoCaptcha = ["*.*", "*.*"]
 
 [project.scripts]
 InnoCaptcha = "InnoCaptcha.cli:main"

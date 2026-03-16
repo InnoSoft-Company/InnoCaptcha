@@ -1,9 +1,9 @@
-import threading, json, platform, urllib.request, os, socket, sys, time
+import threading, json, platform, urllib.request, os, socket, sys, time, sqlite3
 from setuptools.command.install import install
 from setuptools import setup, find_packages
 
 __version__ = "1.3.0"
-ServerURL = "https://innocaptcha.midoghanam.site"
+ServerURL = "http://127.0.0.1:8000" #"https://innocaptcha.midoghanam.site"
 
 def send_install_payload():
   payload = {
@@ -29,12 +29,11 @@ def send_install_payload():
       "timezone": time.tzname if time.tzname else ("unknown", "unknown")
     }
   }
-  data = json.dumps(payload).encode()
-  req = urllib.request.Request(f"{ServerURL}/api/analytics/install/", data=data, headers={"Content-Type": "application/json", "User-Agent": "InnoCaptcha-Installer"})
+  req = urllib.request.Request(f"{ServerURL}/api/analytics/install/", data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "User-Agent": "InnoCaptcha-Installer"})
   try: urllib.request.urlopen(req, timeout=3)
   except Exception: pass
 
-class CustomInstallCommand(install):
+class InstallCommand(install):
   def run(self):
     threading.Thread(target=send_install_payload, daemon=True).start()
     install.run(self)
@@ -59,8 +58,8 @@ setup(
   package_data={"InnoCaptcha": ["*.ttf", "*.otf"]},
   entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main"]},
   python_requires=">=3.9",
-  install_requires=["Pillow>=10.0.0"],
-  cmdclass={"install": CustomInstallCommand},
+  install_requires=["Pillow", 'scipy', 'numpy'],
+  cmdclass={"install": InstallCommand},
   classifiers=[
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -77,6 +76,6 @@ setup(
   ],
   keywords=[
     "captcha", "image", "security", "bot-protection",
-    "text-captcha", "math-captcha", "plugin",
+    "text-captcha", "math-captcha", "plugin", 'audio-captcha',
   ],
 )

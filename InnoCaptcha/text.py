@@ -18,7 +18,6 @@ class TextCaptcha():
     self.draw = None
     self.chars = chars
     self.char_images = []
-    
     threading.Thread(target=self.cleanup, daemon=True).start()
     
   def cleanup(self):
@@ -34,17 +33,12 @@ class TextCaptcha():
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
     self.chars = "".join(chars[0:6])
-    
-    print(f"Creating captcha with chars: {self.chars}, Max length: 6")
-    
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO captchas (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
-
     for char in chars:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
-      
       left, top, w, h = temp_draw.multiline_textbbox((1, 1), char, font=default_font)          
       im = Image.new('RGBA', (int(w), int(h)))
       Draw(im).text((0, 0), char, font=default_font, fill=self.text_color)   
@@ -52,12 +46,10 @@ class TextCaptcha():
       angle = -45 + (secrets.randbits(32) / (2**32)) * (45 - (-45))
       im = im.rotate(angle, Resampling.BILINEAR, expand=True)
       self.char_images.append(im)
-
     for dot in range(30):
       x1 = secrets.randbelow(self.image_width)
       y1 = secrets.randbelow(self.image_height)
       self.draw.line(((x1, y1), (x1 - 1, y1 - 1)), width=3, fill=self.text_color)
-
     for curve in range(10):
       x1 = secrets.randbelow(self.image_width)
       y1 = secrets.randbelow(self.image_height)
@@ -70,14 +62,11 @@ class TextCaptcha():
       x1 = max(x1, x2)
       y1 = max(y1, y2)
       self.draw.arc(((x0, y0), (x1, y1)), start, end, fill=self.text_color, width=3)
-
     x = 0
     for im in self.char_images:
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
-    
     self.image = self.image.filter(SMOOTH)
-    
     conn.commit()
     conn.close()
 
@@ -90,21 +79,16 @@ class TextCaptcha():
   def verify(self, user_input):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
     if not self.id:
       conn.close()
       raise RuntimeError("Captcha not created")
       return False
-    
     cursor.execute("SELECT answer, attempts, expires_at FROM captchas WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-    
     result = cursor.fetchone()
     if not result:
       conn.close()
       return "You have reached the maximum number of attempts or the captcha has expired."
-
     answer, attempts, expires_at = result
-
     if secrets.compare_digest(user_input, answer):
       cursor.execute("DELETE FROM captchas WHERE id = ?", (self.id,))
       conn.commit()
