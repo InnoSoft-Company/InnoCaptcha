@@ -5,3 +5,10 @@ class DB:
     self.conn = sqlite3.connect(db_path)
     self.cursor = self.conn.cursor()
   
+  def execute(self, query, params=()): self.cursor.execute(query, params)
+
+  def commit(self):
+    self.conn.commit()
+    self.conn.close()
+  
+  

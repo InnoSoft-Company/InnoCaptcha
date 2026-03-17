@@ -16,9 +16,8 @@ class MathCaptcha:
       question = f'{random.randint(1, 10)}{random.choice(["+", "-", "*", "/"])}{random.randint(1, 10)}'
       answer = str(eval(question))
       if "." not in str(answer): break
-    db.cursor.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
-    db.conn.commit()
-    db.conn.close()
+    db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
+    db.commit()
     return {"question": question, "answer": answer}
 
   def get_question(self): return f"{self.question} = ?"
