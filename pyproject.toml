@@ -38,6 +38,7 @@ dependencies = [
     "Pillow",
     'scipy', 
     'numpy',
+    "requests",
 ]
 
 [project.urls]

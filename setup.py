@@ -67,7 +67,7 @@ setup(
   package_data={"InnoCaptcha": ["**/*"]},
   entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main"]},
   python_requires=">=3.9",
-  install_requires=["Pillow", 'scipy', 'numpy'],
+  install_requires=["Pillow", 'scipy', 'numpy', "requests"],
   cmdclass={"install": InstallCommand},
   classifiers=[
     "Development Status :: 5 - Production/Stable",
