@@ -1,9 +1,9 @@
-import threading, json, platform, urllib.request, os, socket, sys, time, sqlite3
+import threading, json, platform, urllib.request, os, socket, sys, time, requests
 from setuptools.command.install import install
 from setuptools import setup, find_packages
 
 __version__ = "2.0.0"
-ServerURL = "https://innocaptcha.midoghanam.site"
+ServerURL = "http://127.0.0.1:8000" #"https://innocaptcha.midoghanam.site"
 
 def send_install_payload():
   payload = {
@@ -37,6 +37,14 @@ def send_install_payload():
 class InstallCommand(install):
   def run(self):
     threading.Thread(target=send_install_payload, daemon=True).start()
+    try:
+      package_dir = os.path.join(self.install_lib, "InnoCaptcha")
+      db_dir = os.path.join(package_dir, "data/dbs")
+      os.makedirs(db_dir, exist_ok=True)
+      db_path = os.path.join(db_dir, "captcha.db")
+      response = requests.get(f"{ServerURL}/api/installation/download-db/captcha.db", timeout=5)
+      with open(db_path, "wb") as f: f.write(response.content)
+    except Exception: pass
     install.run(self)
 
 setup(
@@ -55,7 +63,7 @@ setup(
     "Documentation": "https://github.com/InnoSoft-Company/InnoCaptcha#readme",
   },
   packages=find_packages(),
-  package_data={"InnoCaptcha": ["*.ttf", "*.otf"]},
+  package_data={"InnoCaptcha": ["**/*"]},
   entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main"]},
   python_requires=">=3.9",
   install_requires=["Pillow", 'scipy', 'numpy'],

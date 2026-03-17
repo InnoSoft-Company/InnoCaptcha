@@ -4,8 +4,8 @@ from PIL import Image, ImageFont
 from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
 
-default_font = ImageFont.truetype(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'fonts/DroidSansMono.ttf'), 40)
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'dbs/captcha.db')
+default_font = ImageFont.truetype(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/fonts/DroidSansMono.ttf'), 40)
+db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 class TextCaptcha():
   def __init__(self, chars=None, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80):

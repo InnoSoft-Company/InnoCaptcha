@@ -1,7 +1,7 @@
 import random, sqlite3, os, threading, sqlite3, secrets
 from . import utils
 
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'dbs/captcha.db')
+db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 class MathCaptcha:
   def __init__(self, id=None, question=None, answer=None):

@@ -26,7 +26,7 @@ from unittest.mock import patch, MagicMock
 PACKAGE_DIR = os.path.join(os.path.dirname(__file__))
 sys.path.insert(0, PACKAGE_DIR)
 
-DB_PATH = os.path.join(PACKAGE_DIR, "InnoCaptcha", "dbs/captcha.db")
+DB_PATH = os.path.join(PACKAGE_DIR, "InnoCaptcha", "data/dbs/captcha.db")
 
 def init_db():
     """Create all three tables if they don't exist."""

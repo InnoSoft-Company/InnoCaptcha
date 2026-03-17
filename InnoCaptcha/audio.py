@@ -3,7 +3,7 @@ import numpy as np
 from scipy.signal import butter, lfilter
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
-db_path  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'dbs/captcha.db')
+db_path  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 def read_wav(path):
   with wave.open(path, 'rb') as wf:
