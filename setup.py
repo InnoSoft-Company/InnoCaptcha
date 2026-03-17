@@ -63,6 +63,7 @@ setup(
     "Documentation": "https://github.com/InnoSoft-Company/InnoCaptcha#readme",
   },
   packages=find_packages(),
+  include_package_data=True,
   package_data={"InnoCaptcha": ["**/*"]},
   entry_points={"console_scripts": ["InnoCaptcha=InnoCaptcha.cli:main"]},
   python_requires=">=3.9",
