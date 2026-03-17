@@ -34,28 +34,28 @@ def init_db():
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS text (
-            id         TEXT,
+            id         INTEGER PRIMARY KEY,
             answer     TEXT,
-            attempts   INTEGER,
-            created_at DATETIME,
+            attempts INTEGER DEFAULT 0 CHECK(attempts <= 5),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME
         )
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS audio (
-            id         TEXT,
+            id         INTEGER PRIMARY KEY,
             answer     TEXT,
-            attempts   INTEGER,
-            created_at DATETIME,
+            attempts INTEGER DEFAULT 0 CHECK(attempts <= 5),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME
         )
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS math (
-            id         TEXT,
+            id         INTEGER PRIMARY KEY,
             answer     TEXT,
-            attempts   INTEGER,
-            created_at DATETIME,
+            attempts INTEGER DEFAULT 0 CHECK(attempts <= 5),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             expires_at DATETIME
         )
     """)
