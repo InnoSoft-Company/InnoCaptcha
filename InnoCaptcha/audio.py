@@ -3,7 +3,7 @@ import numpy as np
 from scipy.signal import butter, lfilter
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data')
-db_path  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'captchas.db')
+db_path  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'captcha.db')
 
 def read_wav(path):
   with wave.open(path, 'rb') as wf:
@@ -27,21 +27,23 @@ class AudioCaptcha:
   def cleanup(self):
     local_conn = sqlite3.connect(db_path)
     local_cursor = local_conn.cursor()
-    local_cursor.execute("DELETE FROM captchas WHERE expires_at < datetime('now')")
+    local_cursor.execute("DELETE FROM audio WHERE expires_at < datetime('now')")
     local_conn.commit()
     local_conn.close()
 
-  def create(self, chars):
+  def create(self, chars=None):
+    if not chars:
+      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     self.id = secrets.token_hex(16)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("""INSERT INTO captchas (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))""", (self.id, self.chars))
+    cursor.execute("""INSERT INTO audio (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))""", (self.id, self.chars))
     conn.commit()
     conn.close() 
     silence = np.zeros(9000, dtype=np.float32)
     parts   = []
-    for char in chars.lower():
+    for char in self.chars.lower():
       wav_path = os.path.join(data_dir, f"{char}.wav")     
       if not os.path.isfile(wav_path): raise FileNotFoundError(f"Missing audio file for character: '{char}' at {wav_path}")
       samples = read_wav(wav_path)
@@ -73,18 +75,18 @@ class AudioCaptcha:
     if not self.id: raise RuntimeError("Captcha not created")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("""SELECT answer, attempts, expires_at FROM captchas WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5""",(self.id,))
+    cursor.execute("""SELECT answer, attempts, expires_at FROM audio WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5""",(self.id,))
     result = cursor.fetchone()
     if not result:
       conn.close()
       return "You have reached the maximum number of attempts or the captcha has expired."
     answer, attempts, expires_at = result
     if not secrets.compare_digest(user_input.lower(), answer.lower()):
-      cursor.execute("UPDATE captchas SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      cursor.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       conn.commit()
       conn.close()
       return False
-    cursor.execute("DELETE FROM captchas WHERE id = ?", (self.id,))
+    cursor.execute("DELETE FROM audio WHERE id = ?", (self.id,))
     conn.commit()
     conn.close()
     return True

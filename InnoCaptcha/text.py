@@ -5,7 +5,7 @@ from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
 
 default_font = ImageFont.truetype(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'DroidSansMono.ttf'), 40)
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'captchas.db')
+db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'captcha.db')
 
 class TextCaptcha():
   def __init__(self, chars=None, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80):
@@ -23,20 +23,22 @@ class TextCaptcha():
   def cleanup(self):
     local_conn = sqlite3.connect(db_path)
     local_cursor = local_conn.cursor()
-    local_cursor.execute("DELETE FROM captchas WHERE expires_at < datetime('now')")
+    local_cursor.execute("DELETE FROM text WHERE expires_at < datetime('now')")
     local_conn.commit()
     local_conn.close()
 
-  def create(self, chars):
+  def create(self, chars=None):
     self.char_images.clear()
     self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
+    if not chars:
+      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO captchas (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
-    for char in chars:
+    cursor.execute("INSERT INTO text (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
+    for char in self.chars:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
       left, top, w, h = temp_draw.multiline_textbbox((1, 1), char, font=default_font)          
@@ -83,19 +85,19 @@ class TextCaptcha():
       conn.close()
       raise RuntimeError("Captcha not created")
       return False
-    cursor.execute("SELECT answer, attempts, expires_at FROM captchas WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+    cursor.execute("SELECT answer, attempts, expires_at FROM text WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
     result = cursor.fetchone()
     if not result:
       conn.close()
       return "You have reached the maximum number of attempts or the captcha has expired."
     answer, attempts, expires_at = result
     if secrets.compare_digest(user_input, answer):
-      cursor.execute("DELETE FROM captchas WHERE id = ?", (self.id,))
+      cursor.execute("DELETE FROM text WHERE id = ?", (self.id,))
       conn.commit()
       conn.close()
       return True
     else:
-      cursor.execute("UPDATE captchas SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      cursor.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       conn.commit()
       conn.close()
       return False
