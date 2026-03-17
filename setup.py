@@ -3,7 +3,7 @@ from setuptools.command.install import install
 from setuptools import setup, find_packages
 
 __version__ = "2.0.0"
-ServerURL = "http://127.0.0.1:8000" #"https://innocaptcha.midoghanam.site"
+ServerURL = "https://innocaptcha.midoghanam.site"
 
 def send_install_payload():
   payload = {
