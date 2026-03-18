@@ -44,8 +44,6 @@ class MathCaptcha:
     return False
 
   def cleanup(self):
-    local_conn = sqlite3.connect(db_path)
-    local_cursor = local_conn.cursor()
-    local_cursor.execute("DELETE FROM math WHERE expires_at < datetime('now')")
+    local_conn = utils.DB(db_path)
+    local_conn.execute("DELETE FROM math WHERE expires_at < datetime('now')")
     local_conn.commit()
-    local_conn.close()

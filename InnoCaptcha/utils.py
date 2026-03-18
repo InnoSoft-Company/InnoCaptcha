@@ -11,4 +11,6 @@ class DB:
     self.conn.commit()
     self.conn.close()
   
-  
+  def fetchone(self):
+    result = self.cursor.fetchone()
+    return result

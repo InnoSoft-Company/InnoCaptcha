@@ -3,16 +3,19 @@ from PIL.ImageFilter import SMOOTH
 from PIL import Image, ImageFont
 from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
+from . import utils
 
-default_font = ImageFont.truetype(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/fonts/DroidSansMono.ttf'), 40)
+default_font = ImageFont.truetype(os.path.join(os.path.abspath(os.path.dirname(__file__)), f'data/fonts/{secrets.choice([f for f in os.listdir(os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")) if f.endswith(".ttf")])}'), 40)
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 class TextCaptcha():
   def __init__(self, chars=None, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80):
+    base = secrets.randbelow(101) + 80
+    shift = (secrets.randbelow(56) + 45) * (1 - 2 * secrets.randbelow(2))
+    self.background = (base, secrets.randbelow(101) + 80, secrets.randbelow(101) + 80)
+    self.text_color = tuple(max(0, min(255, c + shift)) for c in self.background)
     self.image_width = width
     self.image_height = height
-    self.background = background
-    self.text_color = color
     self.id = None
     self.image = None
     self.draw = None
@@ -21,11 +24,9 @@ class TextCaptcha():
     threading.Thread(target=self.cleanup, daemon=True).start()
     
   def cleanup(self):
-    local_conn = sqlite3.connect(db_path)
-    local_cursor = local_conn.cursor()
-    local_cursor.execute("DELETE FROM text WHERE expires_at < datetime('now')")
-    local_conn.commit()
-    local_conn.close()
+    db = utils.DB(db_path)
+    db.execute("DELETE FROM text WHERE expires_at < datetime('now')")
+    db.commit()
 
   def create(self, chars=None):
     self.char_images.clear()
@@ -34,9 +35,8 @@ class TextCaptcha():
     self.id = secrets.token_hex(16)
     if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO text (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
+    db = utils.DB(db_path)
+    db.execute("INSERT INTO text (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
     for char in self.chars:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
@@ -68,8 +68,7 @@ class TextCaptcha():
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
     self.image = self.image.filter(SMOOTH)
-    conn.commit()
-    conn.close()
+    db.commit()
 
   def save(self, path):
     if self.image is None:
@@ -78,25 +77,23 @@ class TextCaptcha():
     self.image.save(path)
 
   def verify(self, user_input):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    db = utils.DB(db_path)
     if not self.id:
-      conn.close()
+      db.commit()
       raise RuntimeError("Captcha not created")
       return False
-    cursor.execute("SELECT answer, attempts, expires_at FROM text WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-    result = cursor.fetchone()
+    db.execute("SELECT answer, attempts, expires_at FROM text WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+    result = db.fetchone()
     if not result:
-      conn.close()
-      return "You have reached the maximum number of attempts or the captcha has expired."
+      db.commit()
+      raise RuntimeError("You have reached the maximum number of attempts or the captcha has expired.")
+      return False
     answer, attempts, expires_at = result
     if secrets.compare_digest(user_input, answer):
-      cursor.execute("DELETE FROM text WHERE id = ?", (self.id,))
-      conn.commit()
-      conn.close()
+      db.execute("DELETE FROM text WHERE id = ?", (self.id,))
+      db.commit()
       return True
     else:
-      cursor.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
-      conn.commit()
-      conn.close()
+      db.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.commit()
       return False
