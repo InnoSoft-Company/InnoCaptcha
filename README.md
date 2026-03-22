@@ -17,14 +17,15 @@ A pluggable Python CAPTCHA library supporting image-based text challenges, arith
 
 ---
 
-## Table of Contents 
+## Table of Contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
   - [Text CAPTCHA](#1-text-captcha)
   - [Math CAPTCHA](#2-math-captcha)
   - [Audio CAPTCHA](#3-audio-captcha)
-  - [Command-Line Interface](#4-command-line-interface)
+  - [Image CAPTCHA](#4-image-captcha)
+  - [Command-Line Interface](#5-command-line-interface)
 - [API Reference](#api-reference)
 - [Requirements](#requirements)
 - [License](#license)
@@ -61,27 +62,27 @@ captcha = TextCaptcha(
     color=(255, 137, 6),
     background=(15, 14, 23)
 )
-captcha.create("abc123")
-print(captcha.verify("wrong"))  # False
+captcha.create()
+print(captcha.verify('Answer'))
 captcha.save(r"captcha.jpg")
 ```
 
 **Constructor Parameters**
 
-| Parameter    | Type                   | Default           | Description                     |
-|--------------|------------------------|-------------------|---------------------------------|
-| `width`      | `int` or `None`        | `300`             | Image width in pixels.          |
-| `height`     | `int` or `None`        | `80`              | Image height in pixels.         |
-| `color`      | `tuple[int, int, int]` | `(0, 0, 0)`       | Foreground (text) color in RGB. |
-| `background` | `tuple[int, int, int]` | `(255, 255, 255)` | Background color in RGB.        |
+| Parameter    | Type                   | Default        | Description                     |
+|--------------|------------------------|----------------|---------------------------------|
+| `width`      | `int` or `None`        | `300`          | Image width in pixels.          |
+| `height`     | `int` or `None`        | `80`           | Image height in pixels.         |
+| `color`      | `tuple[int, int, int]` | `Random color` | Foreground (text) color in RGB. |
+| `background` | `tuple[int, int, int]` | `Random color` | Background color in RGB.        |
 
-**`create(chars: str)`** — The text string to render in the CAPTCHA image. Required.
+**`create(chars: str)`** — The text string to render in the CAPTCHA image. Optional.
 
 **`save()` Parameters**
 
-| Parameter | Type  |     Default     | Description                                                    |
-|-----------|-------|-----------------|----------------------------------------------------------------|
-| `path`    | `str` | `'captcha.png'` | Full file path or file name to write the image.                |
+| Parameter | Type  | Default         | Description                                     |
+|-----------|-------|-----------------|-------------------------------------------------|
+| `path`    | `str` | `'captcha.png'` | Full file path or file name to write the image. |
 
 > **Notes:**
 > - Uses `secrets` for cryptographically strong randomness.
@@ -126,17 +127,17 @@ print(captcha.verify("wrong"))  # False
 
 **`save()` Parameters**
 
-| Parameter | Type  | Default | Description                                     |
-|-----------|-------|---------|-------------------------------------------------|
-| `path`    | `str` | —       | Full file path to write the output WAV file.    |
+| Parameter | Type  | Default | Description                                  |
+|-----------|-------|---------|----------------------------------------------|
+| `path`    | `str` | —       | Full file path to write the output WAV file. |
 
 **`verify(user_input: str) -> bool or str`**
 
-| Return value                      | Condition                                                    |
-|-----------------------------------|--------------------------------------------------------------|
-| `True`                            | Input matches the stored answer (case-insensitive).          |
-| `False`                           | Input does not match; attempt counter incremented.           |
-| `str` (error message)             | Captcha expired or maximum attempts (5) reached.             |
+| Return value          | Condition                                                |
+|-----------------------|----------------------------------------------------------|
+| `True`                | Input matches the stored answer (case-insensitive).      |
+| `False`               | Input does not match; attempt counter incremented.       |
+| `str` (error message) | Captcha expired or maximum attempts (5) reached.         |
 
 > **Notes:**
 > - Uses `secrets` for randomness in noise generation and speed variation.
@@ -145,7 +146,39 @@ print(captcha.verify("wrong"))  # False
 
 ---
 
-### 4. Command-Line Interface
+### 4. Image CAPTCHA
+
+Presents a 3×3 grid overlay on a randomly selected image. The user identifies which grid cells contain the target object. Detection is performed using YOLOv11n — cells are marked correct if any detected bounding box overlaps them. Challenge state is persisted in SQLite with a 5-minute expiry and a 6-attempt limit.
+
+```python
+from InnoCaptcha.image import ImageCaptcha
+
+captcha = ImageCaptcha()
+captcha.create()
+print(captcha.verify())  # True, False, or str on expiry/lockout
+```
+
+**`create()`** — Loads a random image from the dataset, runs YOLO inference to locate objects, and draws a 3×3 blue grid over the result. Must be called before `verify()`.
+
+**`verify() -> bool or str`** — Displays the gridded image and prompts the user to enter the cell numbers (1–9, comma-separated) containing the detected object. Returns `True` only if the submitted cells exactly match all cells that overlap a detected bounding box.
+
+**`verify(user_input: str) -> bool or str`**
+
+| Return value          | Condition                                                |
+|-----------------------|----------------------------------------------------------|
+| `True`                | Submitted cells exactly match all detected object cells. |
+| `False`               | Input does not match; attempt counter incremented.       |
+| `str` (error message) | Captcha expired or maximum attempts (6) reached.         |
+
+> **Notes:**
+> - Grid numbering is row-major: 1–3 top row, 4–6 middle row, 7–9 bottom row.
+> - Image dataset must be structured as `data/images/<class>/<filename>`.
+> - Uses `secrets` for random image selection.
+> - A background thread runs on instantiation to purge expired records from the database.
+
+---
+
+### 5. Command-Line Interface
 
 ```bash
 # Display the installed version
@@ -161,29 +194,39 @@ InnoCaptcha --upgrade
 
 ### `TextCaptcha`
 
-| Method / Attribute     | Description                                              |
-|------------------------|----------------------------------------------------------|
-| `create(chars: str)`   | Renders the given string into a distorted CAPTCHA image. |
-| `verify(input: str)`   | Returns `True` if `input` matches the generated text.    |
-| `save(path)`           | Writes the image to the specified file path.             |
+| Method / Attribute   | Description                                              |
+|----------------------|----------------------------------------------------------|
+| `create(chars: str)` | Renders the given string into a distorted CAPTCHA image. |
+| `verify(input: str)` | Returns `True` if `input` matches the generated text.    |
+| `save(path)`         | Writes the image to the specified file path.             |
 
 ### `MathCaptcha`
 
-| Method / Attribute      | Description                                           |
-|-------------------------|-------------------------------------------------------|
-| `get_question() -> str` | Returns the challenge string, e.g. `"7 + 3 = ?"`.    |
-| `answer: int`           | The correct integer answer to the current challenge.  |
-| `verify(input) -> bool` | Returns `True` if `input` equals the answer.          |
+| Method / Attribute      | Description                                          |
+|-------------------------|------------------------------------------------------|
+| `get_question() -> str` | Returns the challenge string, e.g. `"7 + 3 = ?"`.   |
+| `answer: int`           | The correct integer answer to the current challenge. |
+| `verify(input) -> bool` | Returns `True` if `input` equals the answer.         |
 
 ### `AudioCaptcha`
 
-| Method / Attribute      | Description                                                                      |
-|-------------------------|----------------------------------------------------------------------------------|
-| `create(chars: str)`    | Builds the audio challenge from up to 6 characters using per-character WAV files.|
-| `verify(input: str)`    | Returns `True` on match, `False` on mismatch, or a `str` on expiry/lockout.     |
-| `save(path: str)`       | Writes the generated audio to a 44100 Hz 16-bit mono WAV file.                  |
-| `id: str`               | The hex token identifying this challenge in the database.                        |
-| `audio: np.ndarray`     | Raw float32 audio samples; `None` until `create()` is called.                   |
+| Method / Attribute   | Description                                                                       |
+|----------------------|-----------------------------------------------------------------------------------|
+| `create(chars: str)` | Builds the audio challenge from up to 6 characters using per-character WAV files. |
+| `verify(input: str)` | Returns `True` on match, `False` on mismatch, or a `str` on expiry/lockout.      |
+| `save(path: str)`    | Writes the generated audio to a 44100 Hz 16-bit mono WAV file.                   |
+| `id: str`            | The hex token identifying this challenge in the database.                         |
+| `audio: np.ndarray`  | Raw float32 audio samples; `None` until `create()` is called.                    |
+
+### `ImageCaptcha`
+
+| Method / Attribute       | Description                                                              |
+|--------------------------|--------------------------------------------------------------------------|
+| `create()`               | Runs YOLO detection on a random dataset image and overlays a 3×3 grid.  |
+| `verify() -> bool or str`| Displays the image, accepts grid input, returns `True` on exact match.  |
+| `id: str`                | The hex token identifying this challenge in the database.                |
+| `image_class: str`       | The randomly selected object class for the current challenge.            |
+| `annotation_coordinates` | List of `(x1, y1, x2, y2)` bounding boxes from YOLO inference.          |
 
 ---
 
@@ -193,6 +236,8 @@ InnoCaptcha --upgrade
 - Pillow >= 10.0.0
 - numpy
 - scipy
+- ultralytics
+- opencv-python
 
 ---
 
