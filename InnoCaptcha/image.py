@@ -1,11 +1,7 @@
+import cv2, threading, os, secrets, sqlite3 
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
-import cv2
-import os
-import secrets
-import sqlite3
-import threading
 from . import utils
 
 images_dir = os.path.join(os.path.dirname(__file__), 'data', 'images')
@@ -75,15 +71,13 @@ class ImageCaptcha:
             db.execute("DELETE FROM image WHERE id = ?", (self.id,))
             db.commit()
             return True
-        else:
-            db.execute("UPDATE image SET attempts = attempts + 1 WHERE id = ?", (self.id,))
-            db.commit()
-            return False
+        db.execute("UPDATE image SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+        db.commit()
+        return False
+
     def save(self, path=None):
         if self.image is None or self.id is None:
             raise ValueError("No captcha created.")
             return False
-        if not path:
-            Image.fromarray(self.image).save("captcha.png")
-        else:
-            Image.fromarray(self.image).save(path)
+        if not path: Image.fromarray(self.image).save("captcha.png")
+        Image.fromarray(self.image).save(path)
