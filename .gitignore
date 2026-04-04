@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 *.pyd
 .git/
+.idea/
+*.db
+*.sqlite3
+InnoCaptcha/data/dbs/

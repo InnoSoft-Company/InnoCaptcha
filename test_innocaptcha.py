@@ -394,6 +394,15 @@ class TestMathCaptcha(unittest.TestCase):
         q = self.captcha.get_question()
         self.assertTrue(q.endswith("= ?"))
 
+    def test_image_output_format(self):
+        from PIL import Image
+        img_captcha = self.MathCaptcha(output="image")
+        self.assertIsInstance(img_captcha.get_question(), Image.Image)
+
+    def test_invalid_output_raise_error(self):
+        with self.assertRaises(ValueError):
+            self.MathCaptcha(output="invalid_mode")
+
     # --- verify() ---
 
     def test_verify_correct_answer_returns_true(self):

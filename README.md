@@ -92,14 +92,19 @@ captcha.save(r"captcha.jpg")
 
 ### 2. Math CAPTCHA
 
-Generates arithmetic challenges (addition, subtraction, multiplication, division). All results are integers — the problem regenerates automatically if division would produce a fraction.
+Generates arithmetic challenges (addition, subtraction, multiplication, division). All results are integers — the problem regenerates automatically if division would produce a fraction. Can output as plain text or an image.
 
 ```python
 from InnoCaptcha.math import MathCaptcha
 
+# Text output (default)
 challenge = MathCaptcha()
 print(challenge.get_question())  # e.g., "7 + 3 = ?"
-print(challenge.answer)          # e.g., 10
+print(challenge.answer)          # e.g., "10"
+
+# Image output
+image_challenge = MathCaptcha(output="image")
+image_challenge.get_question().show() # Returns a PIL.Image
 
 print(challenge.verify(10))      # True
 print(challenge.verify("10"))    # True — string input accepted
@@ -204,8 +209,8 @@ InnoCaptcha --upgrade
 
 | Method / Attribute      | Description                                          |
 |-------------------------|------------------------------------------------------|
-| `get_question() -> str` | Returns the challenge string, e.g. `"7 + 3 = ?"`.   |
-| `answer: int`           | The correct integer answer to the current challenge. |
+| `get_question() -> str \| PIL.Image.Image` | Returns the challenge string (e.g. `"7 + 3 = ?"`) or a rendered PIL Image if `output="image"`.   |
+| `answer: str`           | The correct string integer answer to the current challenge. |
 | `verify(input) -> bool` | Returns `True` if `input` equals the answer.         |
 
 ### `AudioCaptcha`
