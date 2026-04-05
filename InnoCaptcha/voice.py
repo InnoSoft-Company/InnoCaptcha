@@ -1,5 +1,4 @@
-import os, secrets, threading, io
-import speech_recognition as sr
+import os, secrets, threading, io, speech_recognition as sr
 from pydub import AudioSegment
 from pydub.effects import normalize
 from . import utils
@@ -77,7 +76,6 @@ class VoiceCaptcha():
             db.execute("DELETE FROM voice WHERE id = ?", (self.id,))
             db.commit()
             return True
-        else:
-            db.execute("UPDATE voice SET attempts = attempts + 1 WHERE id = ?", (self.id,))
-            db.commit()
-            return False
+        db.execute("UPDATE voice SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+        db.commit()
+        return False
