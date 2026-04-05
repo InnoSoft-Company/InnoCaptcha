@@ -1,13 +1,39 @@
+from PIL import Image, ImageDraw, ImageFont
 import random, sqlite3, os, threading, sqlite3, secrets
 from . import utils
 
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 class MathCaptcha:
-  def __init__(self, id=None, question=None, answer=None):
+  def __init__(self, id=None, question=None, answer=None, output="text"):
+    if output not in ("text", "image"):
+      raise ValueError("output must be 'text' or 'image'")
+    self.output = output
     generated = self.generate()
     self.question, self.answer = generated.values()
+    if self.output == "image":
+      self._render_image()
     threading.Thread(target=self.cleanup, daemon=True).start()
+
+  def _render_image(self):
+    text = f"{self.question} = ?"
+    try:
+        font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
+        font_file = secrets.choice([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
+        font = ImageFont.truetype(os.path.join(font_dir, font_file), 40)
+    except Exception:
+        font = ImageFont.load_default()
+    
+    dummy_img = Image.new('RGB', (1, 1))
+    draw = ImageDraw.Draw(dummy_img)
+    bbox = draw.textbbox((0, 0), text, font=font)
+    width = bbox[2] - bbox[0] + 40
+    height = bbox[3] - bbox[1] + 40
+    
+    img = Image.new('RGB', (width, height), color=(255, 255, 255))
+    d = ImageDraw.Draw(img)
+    d.text((20, 20), text, fill=(0, 0, 0), font=font)
+    self.image = img
 
   def generate(self):
     db = utils.DB(db_path)
@@ -20,7 +46,10 @@ class MathCaptcha:
     db.commit()
     return {"question": question, "answer": answer}
 
-  def get_question(self): return f"{self.question} = ?"
+  def get_question(self):
+    if self.output == "image":
+      return self.image
+    return f"{self.question} = ?"
 
   def verify(self, user_answer):
     db = utils.DB(db_path)
