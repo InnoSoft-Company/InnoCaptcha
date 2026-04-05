@@ -24,7 +24,8 @@ A pluggable Python CAPTCHA library supporting image-based text challenges, arith
   - [Text CAPTCHA](#1-text-captcha)
   - [Math CAPTCHA](#2-math-captcha)
   - [Audio CAPTCHA](#3-audio-captcha)
-  - [Command-Line Interface](#4-command-line-interface)
+  - [Image CAPTCHA](#4-image-captcha)
+  - [Command-Line Interface](#5-command-line-interface)
 - [API Reference](#api-reference)
 - [Requirements](#requirements)
 - [License](#license)
@@ -150,8 +151,39 @@ print(captcha.verify("wrong"))  # False
 
 ---
 
+### 4. Image CAPTCHA
 
-### 4. Command-Line Interface
+Presents a 3×3 grid overlay on a randomly selected image. The user identifies which grid cells contain the target object. Detection is performed using YOLOv11n — cells are marked correct if any detected bounding box overlaps them. Challenge state is persisted in SQLite with a 5-minute expiry and a 6-attempt limit.
+
+```python
+from InnoCaptcha.image import ImageCaptcha
+
+captcha = ImageCaptcha()
+captcha.create()
+print(captcha.verify())  # True, False, or str on expiry/lockout
+```
+
+**`create()`** — Loads a random image from the dataset, runs YOLO inference to locate objects, and draws a 3×3 blue grid over the result. Must be called before `verify()`.
+
+**`verify() -> bool or str`** — Displays the gridded image and prompts the user to enter the cell numbers (1–9, comma-separated) containing the detected object. Returns `True` only if the submitted cells exactly match all cells that overlap a detected bounding box.
+
+**`verify(user_input: str) -> bool or str`**
+
+| Return value          | Condition                                                |
+|-----------------------|----------------------------------------------------------|
+| `True`                | Submitted cells exactly match all detected object cells. |
+| `False`               | Input does not match; attempt counter incremented.       |
+| `str` (error message) | Captcha expired or maximum attempts (6) reached.         |
+
+> **Notes:**
+> - Grid numbering is row-major: 1–3 top row, 4–6 middle row, 7–9 bottom row.
+> - Image dataset must be structured as `data/images/<class>/<filename>`.
+> - Uses `secrets` for random image selection.
+> - A background thread runs on instantiation to purge expired records from the database.
+
+---
+
+### 5. Command-Line Interface
 
 ```bash
 # Display the installed version
@@ -191,6 +223,16 @@ InnoCaptcha --upgrade
 | `id: str`            | The hex token identifying this challenge in the database.                         |
 | `audio: np.ndarray`  | Raw float32 audio samples; `None` until `create()` is called.                    |
 
+### `ImageCaptcha`
+
+| Method / Attribute       | Description                                                              |
+|--------------------------|--------------------------------------------------------------------------|
+| `create()`               | Runs YOLO detection on a random dataset image and overlays a 3×3 grid.  |
+| `verify() -> bool or str`| Displays the image, accepts grid input, returns `True` on exact match.  |
+| `id: str`                | The hex token identifying this challenge in the database.                |
+| `image_class: str`       | The randomly selected object class for the current challenge.            |
+| `annotation_coordinates` | List of `(x1, y1, x2, y2)` bounding boxes from YOLO inference.          |
+
 ---
 
 ## Requirements
@@ -199,6 +241,7 @@ InnoCaptcha --upgrade
 - Pillow >= 10.0.0
 - numpy
 - scipy
+- ultralytics
 - opencv-python
 
 ---
