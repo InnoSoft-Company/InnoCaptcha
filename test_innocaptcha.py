@@ -399,6 +399,12 @@ class TestMathCaptcha(unittest.TestCase):
         img_captcha = self.MathCaptcha(output="image")
         self.assertIsInstance(img_captcha.get_question(), Image.Image)
 
+    def test_image_output_contains_visual_noise(self):
+        img_captcha = self.MathCaptcha(output="image").get_question().convert("RGB")
+        colors = img_captcha.getcolors(maxcolors=1_000_000)
+        self.assertIsNotNone(colors)
+        self.assertGreater(len(colors), 20)
+
     def test_invalid_output_raise_error(self):
         with self.assertRaises(ValueError):
             self.MathCaptcha(output="invalid_mode")

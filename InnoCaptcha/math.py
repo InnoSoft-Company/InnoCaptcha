@@ -1,8 +1,14 @@
-from PIL import Image, ImageDraw, ImageFont
-import random, sqlite3, os, threading, sqlite3, secrets
+import math
+import os
+import random
+import secrets
+import threading
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL.Image import Resampling, Transform
 from . import utils
 
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
+font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
 class MathCaptcha:
   def __init__(self, id=None, question=None, answer=None, output="text"):
@@ -10,38 +16,190 @@ class MathCaptcha:
       raise ValueError("output must be 'text' or 'image'")
     self.output = output
     generated = self.generate()
-    self.question, self.answer = generated.values()
+    self.question = generated["question"]
+    self.answer = generated["answer"]
     if self.output == "image":
       self._render_image()
     threading.Thread(target=self.cleanup, daemon=True).start()
 
-  def _render_image(self):
-    text = f"{self.question} = ?"
+  def _load_font(self, size):
     try:
-        font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
-        font_file = secrets.choice([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
-        font = ImageFont.truetype(os.path.join(font_dir, font_file), 40)
+      font_files = [f for f in os.listdir(font_dir) if f.endswith(".ttf")]
+      if font_files:
+        return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
     except Exception:
-        font = ImageFont.load_default()
+      pass
+    return ImageFont.load_default()
+
+  def _text_bbox(self, text, font):
+    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    return draw.textbbox((0, 0), text, font=font)
+
+  def _tokenize_question(self):
+    tokens = []
+    current = []
+    for char in self.question:
+      if char.isdigit():
+        current.append(char)
+        continue
+      if current:
+        tokens.append("".join(current))
+        current.clear()
+      tokens.append(char)
+    if current:
+      tokens.append("".join(current))
+    tokens.extend(["=", "?"])
+    return tokens
+
+  def _build_palette(self):
+    background = (
+      235 + secrets.randbelow(16),
+      235 + secrets.randbelow(16),
+      235 + secrets.randbelow(16)
+    )
+    text_base = 15 + secrets.randbelow(45)
+    text = (
+      text_base,
+      text_base + secrets.randbelow(20),
+      text_base + secrets.randbelow(20)
+    )
+    noise = (
+      135 + secrets.randbelow(45),
+      135 + secrets.randbelow(45),
+      135 + secrets.randbelow(45)
+    )
+    return {"background": background, "text": text, "noise": noise}
+
+  def _render_token(self, token, palette):
+    font = self._load_font(36 + secrets.randbelow(8))
+    bbox = self._text_bbox(token, font)
+    width = max(1, (bbox[2] - bbox[0]) + 24)
+    height = max(1, (bbox[3] - bbox[1]) + 24)
+    token_image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    token_draw = ImageDraw.Draw(token_image)
+    token_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["text"])
+    token_draw.text((12 - bbox[0], 12 - bbox[1]), token, fill=token_color + (255,), font=font)
+
+    shear = (secrets.randbelow(25) - 12) / 100
+    xshift = int(abs(shear) * token_image.height)
+    token_image = token_image.transform(
+      (token_image.width + xshift, token_image.height),
+      Transform.AFFINE,
+      (1, shear, -xshift if shear > 0 else 0, 0, 1, 0),
+      resample=Resampling.BICUBIC
+    )
     
-    dummy_img = Image.new('RGB', (1, 1))
-    draw = ImageDraw.Draw(dummy_img)
-    bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0] + 40
-    height = bbox[3] - bbox[1] + 40
+    angle = 0 if token in ["+", "-", "×", "="] else secrets.randbelow(31) - 15
+    token_image = token_image.rotate(angle, resample=Resampling.BICUBIC, expand=True)
     
-    img = Image.new('RGB', (width, height), color=(255, 255, 255))
-    d = ImageDraw.Draw(img)
-    d.text((20, 20), text, fill=(0, 0, 0), font=font)
-    self.image = img
+    scale = random.uniform(0.4, 0.6)
+    small_size = (max(1, int(token_image.width * scale)), max(1, int(token_image.height * scale)))
+    pixelated = token_image.resize(small_size, resample=Resampling.BILINEAR)
+    return pixelated.resize(token_image.size, resample=Resampling.NEAREST)
+
+  def _draw_interference(self, image, palette):
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    width, height = image.size
+
+    for _ in range(max(70, (width * height) // 220)):
+      x = secrets.randbelow(width)
+      y = secrets.randbelow(height)
+      radius = secrets.randbelow(2) + 1
+      color = tuple(min(255, channel + secrets.randbelow(30)) for channel in palette["background"])
+      draw.ellipse((x, y, x + radius, y + radius), fill=color + (55,))
+
+    for _ in range(4):
+      x1 = secrets.randbelow(width)
+      y1 = secrets.randbelow(height)
+      x2 = secrets.randbelow(width)
+      y2 = secrets.randbelow(height)
+      start = secrets.randbelow(181)
+      end = min(359, start + 90 + secrets.randbelow(180))
+      left, right = sorted((x1, x2))
+      top, bottom = sorted((y1, y2))
+      if left == right:
+        right += 1
+      if top == bottom:
+        bottom += 1
+      curve_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["noise"])
+      draw.arc((left, top, right, bottom), start, end, fill=curve_color + (95,), width=1)
+
+    for _ in range(1):
+      color = tuple(max(0, min(255, channel + secrets.randbelow(35) - 10)) for channel in palette["noise"])
+      points = [
+        (0, secrets.randbelow(height)),
+        (width // 3, secrets.randbelow(height)),
+        (2 * width // 3, secrets.randbelow(height)),
+        (width, secrets.randbelow(height))
+      ]
+      draw.line(points, fill=color + (80,), width=1)
+
+    return Image.alpha_composite(image.convert("RGBA"), overlay)
+
+  def _apply_wave_distortion(self, image, background):
+    width, height = image.size
+    pad = 10
+    expanded = Image.new("RGBA", (width + pad * 2, height + pad * 2), background + (255,))
+    expanded.paste(image, (pad, pad), image)
+
+    horizontal = Image.new("RGBA", expanded.size, background + (255,))
+    amplitude_x = 3 + secrets.randbelow(4)
+    frequency_x = random.uniform(0.08, 0.16)
+    phase_x = random.uniform(0, math.tau)
+    for y in range(expanded.height):
+      offset = int(round(amplitude_x * math.sin((y * frequency_x) + phase_x)))
+      row = expanded.crop((0, y, expanded.width, y + 1))
+      horizontal.paste(row, (offset, y))
+
+    vertical = Image.new("RGBA", horizontal.size, background + (255,))
+    amplitude_y = 2 + secrets.randbelow(4)
+    frequency_y = random.uniform(0.08, 0.14)
+    phase_y = random.uniform(0, math.tau)
+    for x in range(horizontal.width):
+      offset = int(round(amplitude_y * math.sin((x * frequency_y) + phase_y)))
+      column = horizontal.crop((x, 0, x + 1, horizontal.height))
+      vertical.paste(column, (x, offset))
+
+    return vertical.crop((pad, pad, pad + width, pad + height)).convert("RGB")
+
+  def _render_image(self):
+    palette = self._build_palette()
+    token_images = [self._render_token(token, palette) for token in self._tokenize_question()]
+    max_height = max(token.height for token in token_images)
+    margins = 20
+    gap = 10
+    width = sum(token.width for token in token_images) + (len(token_images) - 1) * gap + (margins * 2)
+    height = max(max_height + 36, 86)
+
+    image = Image.new("RGBA", (width, height), palette["background"] + (255,))
+    x = margins
+    baseline = (height - max_height) // 2
+    for index, token_image in enumerate(token_images):
+      y = baseline + secrets.randbelow(9) - 4
+      y = max(6, min(height - token_image.height - 6, y))
+      image.alpha_composite(token_image, (x, y))
+      extra_gap = 8 if token_image.width > 28 else 0
+      if index >= len(token_images) - 2:
+        extra_gap += 4
+      x += token_image.width + gap + extra_gap
+
+    image = self._draw_interference(image, palette)
+    image = self._apply_wave_distortion(image, palette["background"])
+    self.image = image.filter(ImageFilter.SMOOTH)
 
   def generate(self):
     db = utils.DB(db_path)
     self.id = secrets.token_hex(16)
     while True:
-      question = f'{random.randint(1, 10)}{random.choice(["+", "-", "*", "/"])}{random.randint(1, 10)}'
-      answer = str(eval(question))
-      if "." not in str(answer): break
+      op = random.choice(["+", "-", "×"])
+      num1 = random.randint(1, 10)
+      num2 = random.randint(1, 10)
+      question = f'{num1}{op}{num2}'
+      
+      eval_q = f'{num1}*{num2}' if op == '×' else question
+      answer = str(eval(eval_q))
+      break
     db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
     db.commit()
     return {"question": question, "answer": answer}
