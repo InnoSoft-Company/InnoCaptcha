@@ -1,6 +1,6 @@
 import os, secrets, sqlite3, threading, wave
-import numpy as np
 from scipy.signal import butter, lfilter
+import numpy as np
 from . import utils
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')

@@ -1,10 +1,6 @@
-import math
-import os
-import random
-import secrets
-import threading
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
+import math, os, random, secrets, threading
 from . import utils
 
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
@@ -12,32 +8,25 @@ font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts"
 
 class MathCaptcha:
   def __init__(self, id=None, question=None, answer=None, output="text"):
-    if output not in ("text", "image"):
-      raise ValueError("output must be 'text' or 'image'")
+    if output not in ("text", "image"): raise ValueError("output must be 'text' or 'image'")
     self.output = output
     generated = self.generate()
     self.question = generated["question"]
     self.answer = generated["answer"]
-    if self.output == "image":
-      self._render_image()
+    if self.output == "image": self._render_image()
     threading.Thread(target=self.cleanup, daemon=True).start()
 
   def _load_font(self, size):
     try:
       font_files = [f for f in os.listdir(font_dir) if f.endswith(".ttf")]
-      if font_files:
-        return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
-    except Exception:
-      pass
+      if font_files: return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
+    except Exception: pass
     return ImageFont.load_default()
 
-  def _text_bbox(self, text, font):
-    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    return draw.textbbox((0, 0), text, font=font)
+  def _text_bbox(self, text, font): return ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
 
   def _tokenize_question(self):
-    tokens = []
-    current = []
+    tokens, current = [], []
     for char in self.question:
       if char.isdigit():
         current.append(char)
@@ -46,30 +35,10 @@ class MathCaptcha:
         tokens.append("".join(current))
         current.clear()
       tokens.append(char)
-    if current:
-      tokens.append("".join(current))
+    if current: tokens.append("".join(current))
     tokens.extend(["=", "?"])
     return tokens
-
-  def _build_palette(self):
-    background = (
-      235 + secrets.randbelow(16),
-      235 + secrets.randbelow(16),
-      235 + secrets.randbelow(16)
-    )
-    text_base = 15 + secrets.randbelow(45)
-    text = (
-      text_base,
-      text_base + secrets.randbelow(20),
-      text_base + secrets.randbelow(20)
-    )
-    noise = (
-      135 + secrets.randbelow(45),
-      135 + secrets.randbelow(45),
-      135 + secrets.randbelow(45)
-    )
-    return {"background": background, "text": text, "noise": noise}
-
+  def _build_palette(self): return {"background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))}
   def _render_token(self, token, palette):
     font = self._load_font(36 + secrets.randbelow(8))
     bbox = self._text_bbox(token, font)
@@ -79,19 +48,11 @@ class MathCaptcha:
     token_draw = ImageDraw.Draw(token_image)
     token_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["text"])
     token_draw.text((12 - bbox[0], 12 - bbox[1]), token, fill=token_color + (255,), font=font)
-
     shear = (secrets.randbelow(25) - 12) / 100
     xshift = int(abs(shear) * token_image.height)
-    token_image = token_image.transform(
-      (token_image.width + xshift, token_image.height),
-      Transform.AFFINE,
-      (1, shear, -xshift if shear > 0 else 0, 0, 1, 0),
-      resample=Resampling.BICUBIC
-    )
-    
+    token_image = token_image.transform((token_image.width + xshift, token_image.height), Transform.AFFINE, (1, shear, -xshift if shear > 0 else 0, 0, 1, 0), resample=Resampling.BICUBIC)
     angle = 0 if token in ["+", "-", "×", "="] else secrets.randbelow(31) - 15
     token_image = token_image.rotate(angle, resample=Resampling.BICUBIC, expand=True)
-    
     scale = random.uniform(0.4, 0.6)
     small_size = (max(1, int(token_image.width * scale)), max(1, int(token_image.height * scale)))
     pixelated = token_image.resize(small_size, resample=Resampling.BILINEAR)
@@ -118,23 +79,15 @@ class MathCaptcha:
       end = min(359, start + 90 + secrets.randbelow(180))
       left, right = sorted((x1, x2))
       top, bottom = sorted((y1, y2))
-      if left == right:
-        right += 1
-      if top == bottom:
-        bottom += 1
+      if left == right: right += 1
+      if top == bottom: bottom += 1
       curve_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["noise"])
       draw.arc((left, top, right, bottom), start, end, fill=curve_color + (95,), width=1)
 
     for _ in range(1):
       color = tuple(max(0, min(255, channel + secrets.randbelow(35) - 10)) for channel in palette["noise"])
-      points = [
-        (0, secrets.randbelow(height)),
-        (width // 3, secrets.randbelow(height)),
-        (2 * width // 3, secrets.randbelow(height)),
-        (width, secrets.randbelow(height))
-      ]
+      points = [(0, secrets.randbelow(height)), (width // 3, secrets.randbelow(height)), (2 * width // 3, secrets.randbelow(height)), (width, secrets.randbelow(height))]
       draw.line(points, fill=color + (80,), width=1)
-
     return Image.alpha_composite(image.convert("RGBA"), overlay)
 
   def _apply_wave_distortion(self, image, background):
@@ -171,7 +124,6 @@ class MathCaptcha:
     gap = 10
     width = sum(token.width for token in token_images) + (len(token_images) - 1) * gap + (margins * 2)
     height = max(max_height + 36, 86)
-
     image = Image.new("RGBA", (width, height), palette["background"] + (255,))
     x = margins
     baseline = (height - max_height) // 2
@@ -180,8 +132,7 @@ class MathCaptcha:
       y = max(6, min(height - token_image.height - 6, y))
       image.alpha_composite(token_image, (x, y))
       extra_gap = 8 if token_image.width > 28 else 0
-      if index >= len(token_images) - 2:
-        extra_gap += 4
+      if index >= len(token_images) - 2: extra_gap += 4
       x += token_image.width + gap + extra_gap
 
     image = self._draw_interference(image, palette)
@@ -196,7 +147,6 @@ class MathCaptcha:
       num1 = random.randint(1, 10)
       num2 = random.randint(1, 10)
       question = f'{num1}{op}{num2}'
-      
       eval_q = f'{num1}*{num2}' if op == '×' else question
       answer = str(eval(eval_q))
       break
@@ -205,8 +155,7 @@ class MathCaptcha:
     return {"question": question, "answer": answer}
 
   def get_question(self):
-    if self.output == "image":
-      return self.image
+    if self.output == "image": return self.image
     return f"{self.question} = ?"
 
   def verify(self, user_answer):
