@@ -1,6 +1,0 @@
-numpy
-scipy
-Pillow
-requests
-ultralytics
-opencv-python
