@@ -1,19 +1,20 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
 import math, os, secrets, threading, operator, random
-from .utils import DB, DB_PATH
+from .utils import DB, log_event
 
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
 class MathCaptcha:
-  def __init__(self, id=None, question=None, answer=None, output="text", lang='en'):
+  def __init__(self, output="text", lang='en'):
     if output not in ("text", "image"): raise ValueError("output must be 'text' or 'image'")
     self.output = output
     self.lang = lang
-    generated = self.generate()
-    self.question = generated["question"]
-    self.answer = generated["answer"]
-    if self.output == "image": self._render_image()
+    self.question = None
+    self.answer = None
+    self.id = None
+    self.image = None
+    self.create() # Backward compatibility
     threading.Thread(target=self.cleanup, daemon=True).start()
 
   def _load_font(self, size):
@@ -90,11 +91,6 @@ class MathCaptcha:
       if top == bottom: bottom += 1
       curve_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["noise"])
       draw.arc((left, top, right, bottom), start, end, fill=curve_color + (95,), width=1)
-
-    for _ in range(1):
-      color = tuple(max(0, min(255, channel + secrets.randbelow(35) - 10)) for channel in palette["noise"])
-      points = [(0, secrets.randbelow(height)), (width // 3, secrets.randbelow(height)), (2 * width // 3, secrets.randbelow(height)), (width, secrets.randbelow(height))]
-      draw.line(points, fill=color + (80,), width=1)
     return Image.alpha_composite(image.convert("RGBA"), overlay)
 
   def _apply_wave_distortion(self, image, background):
@@ -102,7 +98,6 @@ class MathCaptcha:
     pad = 10
     expanded = Image.new("RGBA", (width + pad * 2, height + pad * 2), background + (255,))
     expanded.paste(image, (pad, pad), image)
-
     horizontal = Image.new("RGBA", expanded.size, background + (255,))
     amplitude_x = 3 + secrets.randbelow(4)
     frequency_x = 0.08 + (secrets.randbelow(80) / 1000.0)
@@ -111,7 +106,6 @@ class MathCaptcha:
       offset = int(round(amplitude_x * math.sin((y * frequency_x) + phase_x)))
       row = expanded.crop((0, y, expanded.width, y + 1))
       horizontal.paste(row, (offset, y))
-
     vertical = Image.new("RGBA", horizontal.size, background + (255,))
     amplitude_y = 2 + secrets.randbelow(4)
     frequency_y = 0.08 + (secrets.randbelow(60) / 1000.0)
@@ -120,71 +114,88 @@ class MathCaptcha:
       offset = int(round(amplitude_y * math.sin((x * frequency_y) + phase_y)))
       column = horizontal.crop((x, 0, x + 1, horizontal.height))
       vertical.paste(column, (x, offset))
-
     return vertical.crop((pad, pad, pad + width, pad + height)).convert("RGB")
+
+  def create(self, ip=None, session_id=None):
+    self.id = secrets.token_hex(16)
+    operators = {"+": operator.add, "-": operator.sub, "×": operator.mul}
+    op = secrets.choice(["+", "-", "×"])
+    num1 = secrets.randbelow(10) + 1
+    num2 = secrets.randbelow(10) + 1
+    if op == "-" and num1 < num2: num1, num2 = num2, num1
+    self.question = f'{num1}{op}{num2}'
+    self.answer = str(operators[op](num1, num2))
+    
+    with DB() as db:
+      db.execute("INSERT INTO math (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
+                 (self.id, self.answer, ip, session_id))
+      db.commit()
+    
+    log_event("CAPTCHA_CREATED", f"Math captcha created: {self.id}", {"module": "math", "ip": ip, "session": session_id})
+    if self.output == "image": self._render_image()
+    return self.id
 
   def _render_image(self):
     palette = self._build_palette()
     token_images = [self._render_token(token, palette) for token in self._tokenize_question()]
     max_height = max(token.height for token in token_images)
-    margins = 20
-    gap = 10
+    margins, gap, x = 20, 10, 20
     width = sum(token.width for token in token_images) + (len(token_images) - 1) * gap + (margins * 2)
     height = max(max_height + 36, 86)
     image = Image.new("RGBA", (width, height), palette["background"] + (255,))
-    x = margins
     baseline = (height - max_height) // 2
     for index, token_image in enumerate(token_images):
-      y = baseline + secrets.randbelow(9) - 4
-      y = max(6, min(height - token_image.height - 6, y))
+      y = max(6, min(height - token_image.height - 6, baseline + secrets.randbelow(9) - 4))
       image.alpha_composite(token_image, (x, y))
       extra_gap = 8 if token_image.width > 28 else 0
       if index >= len(token_images) - 2: extra_gap += 4
       x += token_image.width + gap + extra_gap
-
     image = self._draw_interference(image, palette)
     image = self._apply_wave_distortion(image, palette["background"])
     self.image = image.filter(ImageFilter.SMOOTH)
-
-  def generate(self):
-    self.id = secrets.token_hex(16)
-    operators = {"+": operator.add, "-": operator.sub, "×": operator.mul}
-    while True:
-      op = secrets.choice(["+", "-", "×"])
-      num1 = secrets.randbelow(10) + 1
-      num2 = secrets.randbelow(10) + 1
-      if op == "-" and num1 < num2: num1, num2 = num2, num1
-      question = f'{num1}{op}{num2}'
-      answer = str(operators[op](num1, num2))
-      break
-    
-    with DB() as db:
-      db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
-      db.commit()
-    return {"question": question, "answer": answer}
 
   def get_question(self):
     if self.output == "image": return self.image
     return f"{self.question} = ?"
 
-  def verify(self, user_answer):
+  def verify(self, user_answer, ip=None, session_id=None):
     if not self.id:
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
       
     with DB() as db:
-      db.execute("SELECT answer, attempts, expires_at FROM math WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+      db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM math WHERE id = ?", (self.id,))
       result = db.fetchone()
       if not result:
-        return "Captcha not found or expired" if self.lang == 'en' else "الكابتشا غير موجودة أو انتهت صلاحيتها"
+        log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "math", "ip": ip})
+        return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
       
-      answer, attempts, expires_at = result
+      answer, attempts, expires_at, db_ip, db_session = result
+      
+      # Context Binding Validation (#5)
+      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+        log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "math", "ip": ip, "db_ip": db_ip})
+        return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
+
+      # Rate Limiting & Expiry (#4)
+      if attempts >= 5:
+        log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "math", "ip": ip})
+        return "Max attempts reached" if self.lang == 'en' else "تجاوزت عدد المحاولات"
+      
+      # Expiry check logic (DB might return expired)
+      db.execute("SELECT 1 FROM math WHERE id = ? AND expires_at >= datetime('now')", (self.id,))
+      if not db.fetchone():
+        log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "math", "ip": ip})
+        return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
+
       if secrets.compare_digest(str(answer), str(user_answer)):
         db.execute("DELETE FROM math WHERE id = ?", (self.id,))
         db.commit()
+        log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "math", "ip": ip})
         return True
         
       db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       db.commit()
+      log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "math", "ip": ip, "attempt": attempts+1})
     return False
 
   def cleanup(self):

@@ -1,0 +1,33 @@
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Audio captcha created: b18b78b2a94d6a788ab8f12409d529a2", "meta": {"module": "audio", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Audio captcha created: 6d88ce9942667a4eb3ed79c9c0006841", "meta": {"module": "audio", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 6d88ce9942667a4eb3ed79c9c0006841", "meta": {"module": "audio", "ip": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 8c01ef6a60e7a4680d92344c6a6c4f33", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 2fa0e7bdd02c0bb5854a32e290bd50af", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 7e39d08f7b3d5024d4bb224b1675c050", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 2497533c930f7c5db5ffd01501d9e73c", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 787b5dc8894d22ca3a8a07a671f9dae3", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: b015f6aee7cb40f118be080b1dbab735", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: b015f6aee7cb40f118be080b1dbab735", "meta": {"module": "text", "ip": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 7826a071c039cbb2e70d6438b2874a1b", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "VERIFY_REJECTED", "msg": "Max attempts reached: 7826a071c039cbb2e70d6438b2874a1b", "meta": {"module": "text", "ip": null}}
+2026-04-17 01:34:35 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 5d26b0c0ec6e91c2f765a4e3d856e330", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:34:35 [INFO] {"event": "VERIFY_FAILED", "msg": "Wrong answer for 5d26b0c0ec6e91c2f765a4e3d856e330", "meta": {"module": "text", "ip": null, "attempt": 1}}
+2026-04-17 01:34:59 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Audio captcha created: d3e930676466b6b6261927414f28c308", "meta": {"module": "audio", "ip": null, "session": null}}
+2026-04-17 01:34:59 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Audio captcha created: 9832d588c82bb16c57e3b86d1dbe35c1", "meta": {"module": "audio", "ip": null, "session": null}}
+2026-04-17 01:34:59 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 9832d588c82bb16c57e3b86d1dbe35c1", "meta": {"module": "audio", "ip": null}}
+2026-04-17 01:34:59 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Math captcha created: 810a5e82392c4547a2830f1b82e7f357", "meta": {"module": "math", "ip": null, "session": null}}
+2026-04-17 01:34:59 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Math captcha created: 0aecc8f35e25ef4b22f3f00cc1b29cfe", "meta": {"module": "math", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 0aecc8f35e25ef4b22f3f00cc1b29cfe", "meta": {"module": "math", "ip": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Math captcha created: d7e82651cc6d4fb57904b381dba21a8d", "meta": {"module": "math", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "VERIFY_ABORT", "msg": "Captcha not found: d7e82651cc6d4fb57904b381dba21a8d", "meta": {"module": "math", "ip": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 5f0392a88d7379b3f1bf057cce7d98d3", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: e6bffc960771679618ab6587aa609a02", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 211c3714d74f0b479cffb0e4786e798c", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 6306484a9af6d2467ae70df802283091", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: e95a23490840a3774e7efd7fd9a3b402", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 3a9f9ea9b626a2e6d2e541620490251a", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 3a9f9ea9b626a2e6d2e541620490251a", "meta": {"module": "text", "ip": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 6f17790b9e127f6e5e3acfed8f98f4cc", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "VERIFY_REJECTED", "msg": "Max attempts reached: 6f17790b9e127f6e5e3acfed8f98f4cc", "meta": {"module": "text", "ip": null}}
+2026-04-17 01:35:00 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 1cb00de936c32eef0386ab207a61f159", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 01:35:00 [INFO] {"event": "VERIFY_FAILED", "msg": "Wrong answer for 1cb00de936c32eef0386ab207a61f159", "meta": {"module": "text", "ip": null, "attempt": 1}}

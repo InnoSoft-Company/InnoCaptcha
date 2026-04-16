@@ -2,7 +2,7 @@ import cv2, threading, os, secrets
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
-from .utils import DB
+from .utils import DB, log_event
 
 images_dir = os.path.join(os.path.dirname(__file__), 'data', 'images')
 
@@ -27,7 +27,7 @@ class ImageCaptcha:
     self.id = None
     threading.Thread(target=self.cleanup, daemon=True).start()
 
-  def create(self):
+  def create(self, ip=None, session_id=None):
     self.id = secrets.token_hex(16)
     pil_img = Image.open(self.image_path).convert('RGB')
     img = np.array(pil_img)
@@ -58,28 +58,51 @@ class ImageCaptcha:
           correct_grids.add(grid_num)
         
     with DB() as db:
-      db.execute("INSERT INTO image (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, ",".join(map(str, sorted(correct_grids)))))
+      db.execute("INSERT INTO image (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
+                 (self.id, ",".join(map(str, sorted(correct_grids))), ip, session_id))
       db.commit()
+    
+    log_event("CAPTCHA_CREATED", f"Image captcha created: {self.id}", {"module": "image", "ip": ip, "session": session_id})
     self.image = img
+    return self.id
 
-  def verify(self, user_input):
+  def verify(self, user_input, ip=None, session_id=None):
     if not self.id:
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
             
     with DB() as db:
-      db.execute("SELECT answer, attempts FROM image WHERE id = ? AND expires_at > datetime('now') AND attempts < 5", (self.id,))
+      db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM image WHERE id = ?", (self.id,))
       result = db.fetchone()
       if not result:
-        return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
-                
-      correct_answer = result[0]
-      if user_input == correct_answer:
+        log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "image", "ip": ip})
+        return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
+      
+      answer, attempts, expires_at, db_ip, db_session = result
+
+      # Context Binding Validation (#5)
+      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+        log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "image", "ip": ip, "db_ip": db_ip})
+        return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
+
+      # Rate Limiting & Expiry (#4)
+      if attempts >= 5:
+        log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "image", "ip": ip})
+        return "Max attempts reached" if self.lang == 'en' else "تجاوزت عدد المحاولات"
+      
+      db.execute("SELECT 1 FROM image WHERE id = ? AND expires_at >= datetime('now')", (self.id,))
+      if not db.fetchone():
+        log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "image", "ip": ip})
+        return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
+
+      if user_input == answer:
         db.execute("DELETE FROM image WHERE id = ?", (self.id,))
         db.commit()
+        log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "image", "ip": ip})
         return True
             
       db.execute("UPDATE image SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       db.commit()
+      log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "image", "ip": ip, "attempt": attempts+1})
       return False
 
   def save(self, path=None):

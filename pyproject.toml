@@ -35,10 +35,16 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "Pillow", "ultralytics", 
-    'scipy', 
-    'numpy', "opencv-python",
+    "Pillow",
+    "ultralytics",
+    "scipy",
+    "numpy",
+    "opencv-python",
     "requests",
+    "arabic-reshaper",
+    "python-bidi",
+    "pydub",
+    "SpeechRecognition",
 ]
 
 [project.urls]

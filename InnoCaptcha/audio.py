@@ -1,7 +1,7 @@
 import os, secrets, threading, wave
 from scipy.signal import butter, lfilter
 import numpy as np
-from .utils import DB
+from .utils import DB, log_event
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
 
@@ -29,15 +29,18 @@ class AudioCaptcha:
       db.execute("DELETE FROM audio WHERE expires_at < datetime('now')")
       db.commit()
 
-  def create(self, chars=None):
+  def create(self, chars=None, ip=None, session_id=None):
     if not chars:
       chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     self.id = secrets.token_hex(16)
     
     with DB() as db:
-      db.execute("INSERT INTO audio (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, self.chars))
+      db.execute("INSERT INTO audio (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", 
+                 (self.id, self.chars, ip, session_id))
       db.commit()
+    
+    log_event("CAPTCHA_CREATED", f"Audio captcha created: {self.id}", {"module": "audio", "ip": ip, "session": session_id})
         
     silence = np.zeros(9000, dtype=np.float32)
     parts   = []
@@ -63,37 +66,55 @@ class AudioCaptcha:
     b, a = butter(2, 3400 / (44100 / 2), btype='low')
     combined = lfilter(b, a, combined)   
     self.audio = combined
+    return self.id
 
   def save(self, path):
     if self.audio is None: 
       raise ValueError("No captcha created.")
-        
     samples = np.clip(self.audio, -1.0, 1.0)
     pcm = (samples * 32767).astype(np.int16)
-    
     with wave.open(path, 'wb') as wf:
       wf.setnchannels(1)
       wf.setsampwidth(2)
       wf.setframerate(44100)
       wf.writeframes(pcm.tobytes())
 
-  def verify(self, user_input):
+  def verify(self, user_input, ip=None, session_id=None):
     if not self.id: 
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
         
     with DB() as db:
-      db.execute("SELECT answer, attempts, expires_at FROM audio WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+      db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM audio WHERE id = ?", (self.id,))
       result = db.fetchone()
         
       if not result:
-        return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
+        log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "audio", "ip": ip})
+        return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
           
-      answer, attempts, expires_at = result
+      answer, attempts, expires_at, db_ip, db_session = result
+
+      # Context Binding Validation (#5)
+      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+        log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "audio", "ip": ip, "db_ip": db_ip})
+        return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
+
+      # Rate Limiting & Expiry (#4)
+      if attempts >= 5:
+        log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "audio", "ip": ip})
+        return "Max attempts reached" if self.lang == 'en' else "تجاوزت عدد المحاولات"
+      
+      db.execute("SELECT 1 FROM audio WHERE id = ? AND expires_at >= datetime('now')", (self.id,))
+      if not db.fetchone():
+        log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "audio", "ip": ip})
+        return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
+
       if secrets.compare_digest(user_input.lower(), answer.lower()):
         db.execute("DELETE FROM audio WHERE id = ?", (self.id,))
         db.commit()
+        log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "audio", "ip": ip})
         return True
           
       db.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       db.commit()
+      log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "audio", "ip": ip, "attempt": attempts+1})
     return False
