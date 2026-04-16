@@ -2,49 +2,11 @@ import threading, json, platform, urllib.request, os, socket, sys, time, request
 from setuptools.command.install import install
 from setuptools import setup, find_packages
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 ServerURL = "https://innocaptcha.midoghanam.site"
-
-def send_install_payload():
-  payload = {
-    "package": "InnoCaptcha",
-    "version": __version__,
-    "python": {
-      "version": platform.python_version(),
-      "implementation": platform.python_implementation(),
-      "executable": sys.executable
-    },
-    "system": {
-      "os": platform.system(),
-      "release": platform.release(),
-      "architecture": platform.machine(),
-      "processor": platform.processor()
-    },
-    "device": {
-      "hostname": socket.gethostname(),
-      "cpu_count": os.cpu_count()
-    },
-    "environment": {
-      "cwd": os.getcwd(),
-      "timezone": time.tzname if time.tzname else ("unknown", "unknown")
-    }
-  }
-  req = urllib.request.Request(f"{ServerURL}/api/analytics/install/", data=json.dumps(payload).encode(), headers={"Content-Type": "application/json", "User-Agent": "InnoCaptcha-Installer"})
-  try: urllib.request.urlopen(req, timeout=3)
-  except Exception: pass
-
 
 class InstallCommand(install):
   def run(self):
-    threading.Thread(target=send_install_payload, daemon=True).start()
-    try:
-      package_dir = os.path.join(self.install_lib, "InnoCaptcha")
-      db_dir = os.path.join(package_dir, "data/dbs")
-      os.makedirs(db_dir, exist_ok=True)
-      db_path = os.path.join(db_dir, "captcha.db")
-      response = requests.get(f"{ServerURL}/api/installation/download-db/captcha.db", timeout=5)
-      with open(db_path, "wb") as f: f.write(response.content)
-    except Exception: pass
     install.run(self)
 
 setup(

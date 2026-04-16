@@ -1,15 +1,16 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
-import math, os, random, secrets, threading
+import math, os, secrets, threading, operator, random
 from . import utils
 
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
 class MathCaptcha:
-  def __init__(self, id=None, question=None, answer=None, output="text"):
+  def __init__(self, id=None, question=None, answer=None, output="text", lang='en'):
     if output not in ("text", "image"): raise ValueError("output must be 'text' or 'image'")
     self.output = output
+    self.lang = lang
     generated = self.generate()
     self.question = generated["question"]
     self.answer = generated["answer"]
@@ -38,7 +39,14 @@ class MathCaptcha:
     if current: tokens.append("".join(current))
     tokens.extend(["=", "?"])
     return tokens
-  def _build_palette(self): return {"background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))}
+
+  def _build_palette(self): 
+    return {
+        "background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), 
+        "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), 
+        "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))
+    }
+
   def _render_token(self, token, palette):
     font = self._load_font(36 + secrets.randbelow(8))
     bbox = self._text_bbox(token, font)
@@ -53,7 +61,7 @@ class MathCaptcha:
     token_image = token_image.transform((token_image.width + xshift, token_image.height), Transform.AFFINE, (1, shear, -xshift if shear > 0 else 0, 0, 1, 0), resample=Resampling.BICUBIC)
     angle = 0 if token in ["+", "-", "×", "="] else secrets.randbelow(31) - 15
     token_image = token_image.rotate(angle, resample=Resampling.BICUBIC, expand=True)
-    scale = random.uniform(0.4, 0.6)
+    scale = 0.4 + (secrets.randbelow(20) / 100.0)
     small_size = (max(1, int(token_image.width * scale)), max(1, int(token_image.height * scale)))
     pixelated = token_image.resize(small_size, resample=Resampling.BILINEAR)
     return pixelated.resize(token_image.size, resample=Resampling.NEAREST)
@@ -98,8 +106,8 @@ class MathCaptcha:
 
     horizontal = Image.new("RGBA", expanded.size, background + (255,))
     amplitude_x = 3 + secrets.randbelow(4)
-    frequency_x = random.uniform(0.08, 0.16)
-    phase_x = random.uniform(0, math.tau)
+    frequency_x = 0.08 + (secrets.randbelow(80) / 1000.0)
+    phase_x = (secrets.randbelow(200) / 100.0) * math.pi
     for y in range(expanded.height):
       offset = int(round(amplitude_x * math.sin((y * frequency_x) + phase_x)))
       row = expanded.crop((0, y, expanded.width, y + 1))
@@ -107,8 +115,8 @@ class MathCaptcha:
 
     vertical = Image.new("RGBA", horizontal.size, background + (255,))
     amplitude_y = 2 + secrets.randbelow(4)
-    frequency_y = random.uniform(0.08, 0.14)
-    phase_y = random.uniform(0, math.tau)
+    frequency_y = 0.08 + (secrets.randbelow(60) / 1000.0)
+    phase_y = (secrets.randbelow(200) / 100.0) * math.pi
     for x in range(horizontal.width):
       offset = int(round(amplitude_y * math.sin((x * frequency_y) + phase_y)))
       column = horizontal.crop((x, 0, x + 1, horizontal.height))
@@ -140,18 +148,20 @@ class MathCaptcha:
     self.image = image.filter(ImageFilter.SMOOTH)
 
   def generate(self):
-    db = utils.DB(db_path)
     self.id = secrets.token_hex(16)
+    operators = {"+": operator.add, "-": operator.sub, "×": operator.mul}
     while True:
-      op = random.choice(["+", "-", "×"])
-      num1 = random.randint(1, 10)
-      num2 = random.randint(1, 10)
+      op = secrets.choice(["+", "-", "×"])
+      num1 = secrets.randbelow(10) + 1
+      num2 = secrets.randbelow(10) + 1
+      if op == "-" and num1 < num2: num1, num2 = num2, num1
       question = f'{num1}{op}{num2}'
-      eval_q = f'{num1}*{num2}' if op == '×' else question
-      answer = str(eval(eval_q))
+      answer = str(operators[op](num1, num2))
       break
-    db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
-    db.commit()
+    
+    with utils.DB(db_path) as db:
+        db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
+        db.commit()
     return {"question": question, "answer": answer}
 
   def get_question(self):
@@ -159,27 +169,26 @@ class MathCaptcha:
     return f"{self.question} = ?"
 
   def verify(self, user_answer):
-    db = utils.DB(db_path)
     if not self.id:
-      db.conn.close()
-      raise RuntimeError("Captcha not created")
-    db.cursor.execute("SELECT answer, attempts, expires_at FROM math WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-    result = db.cursor.fetchone()
-    if not result:
-      db.conn.close()
-      raise RuntimeError("Captcha not found or expired")
-    answer, attempts, expires_at = result
-    if secrets.compare_digest(str(answer), str(user_answer)):
-      db.cursor.execute("DELETE FROM math WHERE id = ?", (self.id,))
-      db.conn.commit()
-      db.conn.close()
-      return True
-    db.cursor.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
-    db.conn.commit()
-    db.conn.close()
+      raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
+      
+    with utils.DB(db_path) as db:
+        db.execute("SELECT answer, attempts, expires_at FROM math WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+        result = db.fetchone()
+        if not result:
+          return "Captcha not found or expired" if self.lang == 'en' else "الكابتشا غير موجودة أو انتهت صلاحيتها"
+        
+        answer, attempts, expires_at = result
+        if secrets.compare_digest(str(answer), str(user_answer)):
+          db.execute("DELETE FROM math WHERE id = ?", (self.id,))
+          db.commit()
+          return True
+          
+        db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+        db.commit()
     return False
 
   def cleanup(self):
-    local_conn = utils.DB(db_path)
-    local_conn.execute("DELETE FROM math WHERE expires_at < datetime('now')")
-    local_conn.commit()
+    with utils.DB(db_path) as db:
+        db.execute("DELETE FROM math WHERE expires_at < datetime('now')")
+        db.commit()
