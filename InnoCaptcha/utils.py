@@ -1,9 +1,12 @@
-import sqlite3
+import sqlite3, os
+
+# Centralized database path
+DB_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 class DB:
-  def __init__(self, db_path):
-    self.db_path = db_path
-    self.conn = sqlite3.connect(db_path)
+  def __init__(self, db_path=None):
+    self.db_path = db_path if db_path else DB_PATH
+    self.conn = sqlite3.connect(self.db_path)
     self.cursor = self.conn.cursor()
 
   def __enter__(self):

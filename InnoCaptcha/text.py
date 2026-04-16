@@ -3,27 +3,26 @@ from PIL.ImageFilter import SMOOTH
 from PIL import Image, ImageFont
 from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
-from . import utils
+from .utils import DB
 
 # Arabic support libraries
 try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    HAS_ARABIC_LIBS = True
+  import arabic_reshaper
+  from bidi.algorithm import get_display
+  HAS_ARABIC_LIBS = True
 except ImportError:
-    HAS_ARABIC_LIBS = False
+  HAS_ARABIC_LIBS = False
 
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
 def get_font(size=40):
-    try:
-        fonts = sorted([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
-        if fonts:
-            return ImageFont.truetype(os.path.join(font_dir, secrets.choice(fonts)), size)
-    except Exception:
-        pass
-    return ImageFont.load_default()
+  try:
+    fonts = sorted([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
+    if fonts:
+      return ImageFont.truetype(os.path.join(font_dir, secrets.choice(fonts)), size)
+  except Exception:
+    pass
+  return ImageFont.load_default()
 
 class TextCaptcha():
   def __init__(self, chars=None, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80, lang='en'):
@@ -42,9 +41,9 @@ class TextCaptcha():
     threading.Thread(target=self.cleanup, daemon=True).start()
     
   def cleanup(self):
-    with utils.DB(db_path) as db:
-        db.execute("DELETE FROM text WHERE expires_at < datetime('now')")
-        db.commit()
+    with DB() as db:
+      db.execute("DELETE FROM text WHERE expires_at < datetime('now')")
+      db.commit()
 
   def create(self, chars=None):
     self.char_images.clear()
@@ -53,28 +52,28 @@ class TextCaptcha():
     self.id = secrets.token_hex(16)
     
     if not chars: 
-        chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
+      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     
-    with utils.DB(db_path) as db:
-        db.execute("INSERT INTO text (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
-        db.commit()
+    with DB() as db:
+      db.execute("INSERT INTO text (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.chars))
+      db.commit()
         
     font = get_font(40)
     
     # RTL support for Arabic
     display_text = self.chars
     if self.lang == 'ar' and HAS_ARABIC_LIBS:
-        reshaped_text = arabic_reshaper.reshape(self.chars)
-        display_text = get_display(reshaped_text)
+      reshaped_text = arabic_reshaper.reshape(self.chars)
+      display_text = get_display(reshaped_text)
         
     for char in display_text:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
       try:
-          left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
+        left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
       except AttributeError:
-          w, h = font.getsize(char)
+        w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
       Draw(im).text((0, 0), char, font=font, fill=self.text_color)   
@@ -115,18 +114,18 @@ class TextCaptcha():
     if not self.id:
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
       
-    with utils.DB(db_path) as db:
-        db.execute("SELECT answer, attempts, expires_at FROM text WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-        result = db.fetchone()
-        if not result:
-          return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
+    with DB() as db:
+      db.execute("SELECT answer, attempts, expires_at FROM text WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+      result = db.fetchone()
+      if not result:
+        return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
           
-        answer, attempts, expires_at = result
-        if secrets.compare_digest(user_input, answer):
-          db.execute("DELETE FROM text WHERE id = ?", (self.id,))
-          db.commit()
-          return True
-        else:
-          db.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
-          db.commit()
+      answer, attempts, expires_at = result
+      if secrets.compare_digest(user_input, answer):
+        db.execute("DELETE FROM text WHERE id = ?", (self.id,))
+        db.commit()
+        return True
+      else:
+        db.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+        db.commit()
     return False

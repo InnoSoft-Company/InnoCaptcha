@@ -1,9 +1,8 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
 import math, os, secrets, threading, operator, random
-from . import utils
+from .utils import DB, DB_PATH
 
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
 class MathCaptcha:
@@ -42,9 +41,9 @@ class MathCaptcha:
 
   def _build_palette(self): 
     return {
-        "background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), 
-        "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), 
-        "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))
+      "background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), 
+      "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), 
+      "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))
     }
 
   def _render_token(self, token, palette):
@@ -159,9 +158,9 @@ class MathCaptcha:
       answer = str(operators[op](num1, num2))
       break
     
-    with utils.DB(db_path) as db:
-        db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
-        db.commit()
+    with DB() as db:
+      db.execute("INSERT INTO math (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, answer))
+      db.commit()
     return {"question": question, "answer": answer}
 
   def get_question(self):
@@ -172,23 +171,23 @@ class MathCaptcha:
     if not self.id:
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
       
-    with utils.DB(db_path) as db:
-        db.execute("SELECT answer, attempts, expires_at FROM math WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-        result = db.fetchone()
-        if not result:
-          return "Captcha not found or expired" if self.lang == 'en' else "الكابتشا غير موجودة أو انتهت صلاحيتها"
-        
-        answer, attempts, expires_at = result
-        if secrets.compare_digest(str(answer), str(user_answer)):
-          db.execute("DELETE FROM math WHERE id = ?", (self.id,))
-          db.commit()
-          return True
-          
-        db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+    with DB() as db:
+      db.execute("SELECT answer, attempts, expires_at FROM math WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+      result = db.fetchone()
+      if not result:
+        return "Captcha not found or expired" if self.lang == 'en' else "الكابتشا غير موجودة أو انتهت صلاحيتها"
+      
+      answer, attempts, expires_at = result
+      if secrets.compare_digest(str(answer), str(user_answer)):
+        db.execute("DELETE FROM math WHERE id = ?", (self.id,))
         db.commit()
+        return True
+        
+      db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.commit()
     return False
 
   def cleanup(self):
-    with utils.DB(db_path) as db:
-        db.execute("DELETE FROM math WHERE expires_at < datetime('now')")
-        db.commit()
+    with DB() as db:
+      db.execute("DELETE FROM math WHERE expires_at < datetime('now')")
+      db.commit()

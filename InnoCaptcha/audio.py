@@ -1,10 +1,9 @@
 import os, secrets, threading, wave
 from scipy.signal import butter, lfilter
 import numpy as np
-from . import utils
+from .utils import DB
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
-db_path  = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/dbs/captcha.db')
 
 def read_wav(path):
   with wave.open(path, 'rb') as wf:
@@ -26,17 +25,19 @@ class AudioCaptcha:
     threading.Thread(target=self.cleanup, daemon=True).start()
 
   def cleanup(self):
-    with utils.DB(db_path) as db:
-        db.execute("DELETE FROM audio WHERE expires_at < datetime('now')")
-        db.commit()
+    with DB() as db:
+      db.execute("DELETE FROM audio WHERE expires_at < datetime('now')")
+      db.commit()
 
   def create(self, chars=None):
-    if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
+    if not chars:
+      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     self.id = secrets.token_hex(16)
-    with utils.DB(db_path) as db:
-        db.execute("INSERT INTO audio (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, self.chars))
-        db.commit()
+    
+    with DB() as db:
+      db.execute("INSERT INTO audio (id, answer, attempts, created_at, expires_at) VALUES (?, ?, 0, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, self.chars))
+      db.commit()
         
     silence = np.zeros(9000, dtype=np.float32)
     parts   = []
@@ -65,7 +66,7 @@ class AudioCaptcha:
 
   def save(self, path):
     if self.audio is None: 
-        raise ValueError("No captcha created.")
+      raise ValueError("No captcha created.")
         
     samples = np.clip(self.audio, -1.0, 1.0)
     pcm = (samples * 32767).astype(np.int16)
@@ -78,21 +79,21 @@ class AudioCaptcha:
 
   def verify(self, user_input):
     if not self.id: 
-        raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
+      raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
         
-    with utils.DB(db_path) as db:
-        db.execute("SELECT answer, attempts, expires_at FROM audio WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
-        result = db.fetchone()
+    with DB() as db:
+      db.execute("SELECT answer, attempts, expires_at FROM audio WHERE id = ? AND expires_at >= datetime('now') AND attempts < 5", (self.id,))
+      result = db.fetchone()
         
-        if not result:
-          return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
+      if not result:
+        return "Captcha expired or max attempts reached" if self.lang == 'en' else "انتهت صلاحية الكابتشا أو وصلت لأقصى عدد محاولات"
           
-        answer, attempts, expires_at = result
-        if secrets.compare_digest(user_input.lower(), answer.lower()):
-          db.execute("DELETE FROM audio WHERE id = ?", (self.id,))
-          db.commit()
-          return True
-          
-        db.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      answer, attempts, expires_at = result
+      if secrets.compare_digest(user_input.lower(), answer.lower()):
+        db.execute("DELETE FROM audio WHERE id = ?", (self.id,))
         db.commit()
+        return True
+          
+      db.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.commit()
     return False
