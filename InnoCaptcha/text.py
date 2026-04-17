@@ -52,25 +52,18 @@ class TextCaptcha():
       if key:
         fernet = Fernet(key[0])
         db_answer = fernet.encrypt(self.chars.encode())
-      
       db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, db_answer, ip, session_id))
       db.commit()
-
     log_event("CAPTCHA_CREATED", f"Text captcha created: {self.id}", {"module": "text", "ip": ip, "session": session_id})
-        
     font = get_font(40)
-    
-    # 3. معالجة النص الأصلي (raw_text) للرسم وليس النص المشفر
     display_text = self.chars
     if self.lang == 'ar':
       reshaped_text = arabic_reshaper.reshape(self.chars)
       display_text = get_display(reshaped_text)
-        
     for char in display_text:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
-      try: 
-        left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
+      try: left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
       except AttributeError: w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
@@ -103,6 +96,7 @@ class TextCaptcha():
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
     self.image = self.image.filter(SMOOTH)
+    del self.chars
     return self.id
 
   def save(self, path):
