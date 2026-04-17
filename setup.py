@@ -1,7 +1,7 @@
 from setuptools.command.install import install
 from setuptools import setup, find_packages
 
-__version__ = "2.2.2-dev"
+__version__ = "2.3.0"
 ServerURL = "https://innocaptcha.midoghanam.site"
 
 class InstallCommand(install):
