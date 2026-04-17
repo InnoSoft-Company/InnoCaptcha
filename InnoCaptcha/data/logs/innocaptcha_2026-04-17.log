@@ -50,3 +50,10 @@
 2026-04-17 16:57:39 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: cee7974eeb7be43fd2d1756d9cd480a4", "meta": {"module": "text", "ip": null, "session": null}}
 2026-04-17 17:04:47 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 2edeb9733f2077eaf5f9217b05ca901d", "meta": {"module": "text", "ip": null, "session": null}}
 2026-04-17 17:05:05 [INFO] {"event": "VERIFY_FAILED", "msg": "Wrong answer for 2edeb9733f2077eaf5f9217b05ca901d", "meta": {"module": "text", "ip": null, "attempt": 1}}
+2026-04-17 17:22:34 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: efc5710c75ea92eefc961a1460f740f9", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:22:57 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 7f40acf35fac66fa1b631970582b00cd", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:23:43 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: c4f4898d9a0f91860343a7b01def6e66", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:24:04 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 2dea4809db75c4db67267511dc2d9605", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:24:04 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 2dea4809db75c4db67267511dc2d9605", "meta": {"module": "text", "ip": null}}
+2026-04-17 17:24:28 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 29e1fddbc8092a851f0c48b90c6d3ec3", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:25:34 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 29e1fddbc8092a851f0c48b90c6d3ec3", "meta": {"module": "text", "ip": null}}

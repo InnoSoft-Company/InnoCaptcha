@@ -43,20 +43,15 @@ class TextCaptcha():
     self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
-    
-    # 1. توليد النص الأصلي الخام
-    if not chars: 
-      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
-    raw_text = "".join(chars[0:6])
-    
-    # 2. التشفير للتخزين في قاعدة البيانات فقط
-    db_answer = raw_text
+    if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
+    self.chars = "".join(chars[0:6])
+    db_answer = self.chars
     with DB(db_path=DB_PATH) as db:
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        db_answer = fernet.encrypt(raw_text.encode()) # هنا يتم التشفير
+        db_answer = fernet.encrypt(self.chars.encode())
       
       db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, db_answer, ip, session_id))
       db.commit()
@@ -66,7 +61,7 @@ class TextCaptcha():
     font = get_font(40)
     
     # 3. معالجة النص الأصلي (raw_text) للرسم وليس النص المشفر
-    display_text = raw_text
+    display_text = self.chars
     if self.lang == 'ar':
       reshaped_text = arabic_reshaper.reshape(raw_text)
       display_text = get_display(reshaped_text)
