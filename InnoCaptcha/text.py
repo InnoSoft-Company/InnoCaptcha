@@ -63,7 +63,7 @@ class TextCaptcha():
     # 3. معالجة النص الأصلي (raw_text) للرسم وليس النص المشفر
     display_text = self.chars
     if self.lang == 'ar':
-      reshaped_text = arabic_reshaper.reshape(raw_text)
+      reshaped_text = arabic_reshaper.reshape(self.chars)
       display_text = get_display(reshaped_text)
         
     for char in display_text:
@@ -71,8 +71,7 @@ class TextCaptcha():
       temp_draw = Draw(temp_image)
       try: 
         left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
-      except AttributeError: 
-        w, h = font.getsize(char)
+      except AttributeError: w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
       Draw(im).text((0, 0), char, font=font, fill=self.text_color)   
