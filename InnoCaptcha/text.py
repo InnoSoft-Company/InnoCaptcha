@@ -72,10 +72,8 @@ class TextCaptcha():
     for char in display_text:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
-      try:
-        left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
-      except AttributeError:
-        w, h = font.getsize(char)
+      try: left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
+      except AttributeError: w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
       Draw(im).text((0, 0), char, font=font, fill=self.text_color)   

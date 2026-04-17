@@ -53,7 +53,7 @@ class DB:
         except sqlite3.OperationalError: pass
     
     # Encryption key table
-    self.cursor.execute("""CRETE TABLE IF NOT EXISTS encryption_key (value TEXT)""")
+    self.cursor.execute("""CREATE TABLE IF NOT EXISTS encryption_key (value TEXT)""")
     key = Fernet.generate_key()
     self.cursor.execute("INSERT INTO encryption_key (value) VALUES (?)", (key,))
     self.conn.commit()
