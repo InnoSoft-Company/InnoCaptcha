@@ -46,3 +46,7 @@
 2026-04-17 15:41:50 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 15020b63bf85b95439ef54b157ae0b39", "meta": {"module": "text", "ip": null, "session": null}, "ts": "2026-04-17T13:41:50.973876+00:00"}
 2026-04-17 15:41:50 [INFO] {"event": "CHALLENGE_POLICY_SELECTED", "msg": "Captcha type selected: text", "meta": {"module": "service", "risk_score": 0.0, "difficulty": "easy", "captcha_id": "15020b63bf85b95439ef54b157ae0b39"}, "ts": "2026-04-17T13:41:50.992937+00:00"}
 2026-04-17 15:41:51 [INFO] {"event": "VERIFY_SUCCESS", "msg": "Captcha verified: 15020b63bf85b95439ef54b157ae0b39", "meta": {"module": "text", "ip": null}, "ts": "2026-04-17T13:41:51.029077+00:00"}
+2026-04-17 16:45:31 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 8fcc3b2040696cb7862d3a140138640c", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 16:57:39 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: cee7974eeb7be43fd2d1756d9cd480a4", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:04:47 [INFO] {"event": "CAPTCHA_CREATED", "msg": "Text captcha created: 2edeb9733f2077eaf5f9217b05ca901d", "meta": {"module": "text", "ip": null, "session": null}}
+2026-04-17 17:05:05 [INFO] {"event": "VERIFY_FAILED", "msg": "Wrong answer for 2edeb9733f2077eaf5f9217b05ca901d", "meta": {"module": "text", "ip": null, "attempt": 1}}

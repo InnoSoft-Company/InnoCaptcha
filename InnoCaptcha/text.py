@@ -13,10 +13,8 @@ font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts"
 def get_font(size=40):
   try:
     fonts = sorted([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
-    if fonts:
-      return ImageFont.truetype(os.path.join(font_dir, secrets.choice(fonts)), size)
-  except Exception:
-    pass
+    if fonts: return ImageFont.truetype(os.path.join(font_dir, secrets.choice(fonts)), size)
+  except Exception: pass
   return ImageFont.load_default()
 
 class TextCaptcha():
@@ -46,35 +44,39 @@ class TextCaptcha():
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
     
+    # 1. توليد النص الأصلي الخام
     if not chars: 
       chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
-    self.chars = "".join(chars[0:6])
+    raw_text = "".join(chars[0:6])
     
+    # 2. التشفير للتخزين في قاعدة البيانات فقط
+    db_answer = raw_text
     with DB(db_path=DB_PATH) as db:
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        self.chars = fernet.encrypt(self.chars.encode())
-      db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, self.chars, ip, session_id))
+        db_answer = fernet.encrypt(raw_text.encode()) # هنا يتم التشفير
+      
+      db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, db_answer, ip, session_id))
       db.commit()
 
     log_event("CAPTCHA_CREATED", f"Text captcha created: {self.id}", {"module": "text", "ip": ip, "session": session_id})
         
     font = get_font(40)
     
-    # RTL support for Arabic
-    display_text = self.chars
+    # 3. معالجة النص الأصلي (raw_text) للرسم وليس النص المشفر
+    display_text = raw_text
     if self.lang == 'ar':
-      reshaped_text = arabic_reshaper.reshape(self.chars)
+      reshaped_text = arabic_reshaper.reshape(raw_text)
       display_text = get_display(reshaped_text)
         
     for char in display_text:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
-      try:
+      try: 
         left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
-      except AttributeError:
+      except AttributeError: 
         w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
@@ -85,6 +87,7 @@ class TextCaptcha():
       im = im.rotate(angle, Resampling.BILINEAR, expand=True)
       self.char_images.append(im)
       
+    # إضافة التشويش (نقاط وخطوط)
     for dot in range(30):
       x1 = secrets.randbelow(self.image_width)
       y1 = secrets.randbelow(self.image_height)
@@ -123,18 +126,20 @@ class TextCaptcha():
           
       answer, attempts, expires_at, db_ip, db_session = result
       
+      # فك التشفير للمقارنة
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        answer = fernet.decrypt(answer)
+        # تحويل النتيجة المفكوكة إلى string للمقارنة
+        answer = fernet.decrypt(answer).decode()
         
-      # Context Binding Validation (#5)
+      # Context Binding Validation
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "text", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
 
-      # Rate Limiting & Expiry (#4)
+      # Rate Limiting & Expiry
       if attempts >= 5:
         log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "text", "ip": ip})
         return "Max attempts reached" if self.lang == 'en' else "تجاوزت عدد المحاولات"
@@ -144,6 +149,7 @@ class TextCaptcha():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "text", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
 
+      # استخدام المقارنة الآمنة زمنياً (Timing Safe Comparison)
       if secrets.compare_digest(user_input, answer):
         db.execute("DELETE FROM text WHERE id = ?", (self.id,))
         db.commit()
