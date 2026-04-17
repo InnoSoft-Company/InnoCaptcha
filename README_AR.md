@@ -1,84 +1,125 @@
-# InnoCaptcha (نسخة عربية)
+# InnoCaptcha (المكتبة الإبداعية للكابتشا)
 
-تعتبر InnoCaptcha مكتبة Python احترافية وقابلة للتوسع تدعم تحديات الكابتشا المبنية على النصوص، المسائل الحسابية، التحديات الصوتية، وتحديات الصور، مع نظام أمان يعتمد على الرموز (Tokens) وقواعد بيانات SQLite.
+[![PyPI Version](https://img.shields.io/pypi/v/InnoCaptcha.svg)](https://pypi.org/project/InnoCaptcha/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/InnoCaptcha.svg)](https://pypi.org/project/InnoCaptcha/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/InnoSoft-Company/InnoCaptcha/blob/main/LICENSE)
+[![GitHub last commit](https://img.shields.io/github/last-commit/InnoSoft-Company/InnoCaptcha)](https://github.com/InnoSoft-Company/InnoCaptcha/commits/main)
 
----
-
-## جدول المحتويات
-
-- [التثبيت](#التثبيت)
-- [البداية السريعة](#البداية-السريعة)
-  - [كابتشا النصوص](#1-كابتشا-النصوص)
-  - [كابتشا الرياضيات](#2-كابتشا-الرياضيات)
-  - [كابتشا الصوت](#3-كابتشا-الصوت)
-  - [كابتشا الصور](#4-كابتشا-الصور)
-- [مرجع واجهة البرمجة (API)](#مرجع-واجهة-البرمجة-api)
-- [المتطلبات](#المتطلبات)
-- [الترخيص](#الترخيص)
+**InnoCaptcha** هي مكتبة بايثون احترافية وشاملة لتوليد تحديات الكابتشا (CAPTCHA). مصممة للتطبيقات الحديثة التي تتطلب أماناً عالياً وتجربة مستخدم مميزة. تدعم المكتبة مجموعة واسعة من التحديات، بدءاً من النصوص التقليدية وصولاً إلى الذكاء الاصطناعي والتعرف على الصوت.
 
 ---
 
-## التثبيت
+## ✨ المميزات الرئيسية
+
+- 📝 **كابتشا النصوص**: توليد صور نصية مشوهة مع حواف ناعمة (Anti-aliasing) وتحكم كامل في الأبعاد والألوان.
+- 🔢 **كابتشا الرياضيات**: مسائل حسابية مؤمنة (لا تستخدم `eval()`) مع إمكانية عرضها كنص أو كصورة.
+- 🎧 **كابتشا الصوت**: توليد ملفات صوتية (WAV) تنطق الحروف مع إضافة ضوضاء خلفية وتغيير السرعة لزيادة الأمان.
+- 🗣️ **كابتشا الصوت المتكلم (STT)**: تحدي جديد يطلب من المستخدم نطق عبارة معينة والتحقق منها برمجياً.
+- 🖼️ **كابتشا الصور (YOLOv11)**: تحديات متطورة تعتمد على اكتشاف الأشياء في شبكة 3×3 باستخدام موديل YOLOv11.
+- 🔐 **أمان متقدم**:
+  - نظام عشوائية قوي يعتمد على مكتبة `secrets`.
+  - ربط التحقق بالعنوان (IP) ومعرف الجلسة (Session ID) لمنع الهجمات المكررة.
+  - انتهاء صلاحية تلقائي (5 دقائق) وحد أقصى للمحاولات.
+  - تنظيف تلقائي لقاعدة البيانات في الخلفية.
+- 🗄️ **إدارة قواعد البيانات**: نظام مركزي لإدارة البيانات باستخدام SQLite.
+
+---
+
+## 🚀 التثبيت
 
 ```bash
 pip install InnoCaptcha
 ```
 
----
-
-## البداية السريعة
+## 🛠️ البداية السريعة
 
 ### 1. كابتشا النصوص (Text CAPTCHA)
-
-توليد صورة كابتشا نصية مع إمكانية التحكم في الألوان والأبعاد والخطوط.
+توليد صورة تحتوي على نص عشوائي مشوه.
 
 ```python
 from InnoCaptcha.text import TextCaptcha
 
-# استخدام بسيط
-captcha = TextCaptcha()
-captcha.create("abs")
-print(captcha.verify("abs"))    # ناتج: True
+captcha = TextCaptcha(width=300, height=80)
+captcha.create("abcd")
 captcha.save("captcha.png")
+
+print(captcha.verify("abcd")) # يعطي True
 ```
 
 ### 2. كابتشا الرياضيات (Math CAPTCHA)
-
-توليد مسائل حسابية (جمع، طرح، ضرب).
+مسائل حسابية يمكن عرضها كنص أو صورة.
 
 ```python
 from InnoCaptcha.math import MathCaptcha
 
-# ناتج نصي
-challenge = MathCaptcha()
-print(challenge.get_question())  # مثال: "7 + 3 = ?"
-print(challenge.verify(10))      # ناتج: True
+# تحدي رياضي بصورة
+math = MathCaptcha(output="image")
+math.create()
+math.get_question().show() # يعرض تفاصيل المسألة كصورة
+
+print(math.verify("10"))
 ```
 
 ### 3. كابتشا الصوت (Audio CAPTCHA)
-
-توليد ملف صوتي (WAV) ينطق الحروف مع إضافة ضوضاء وتغيير السرعة لزيادة الأمان.
+توليد ملف صوتي ينطق الحروف للمستخدم.
 
 ```python
 from InnoCaptcha.audio import AudioCaptcha
 
-captcha = AudioCaptcha()
-captcha.create("ab3")
-captcha.save("captcha.wav")
-print(captcha.verify("ab3"))    # ناتج: True
+audio = AudioCaptcha()
+audio.create("x123")
+audio.save("output.wav")
+
+print(audio.verify("x123"))
+```
+
+### 4. كابتشا التحدث (Voice Captcha - جديد!)
+تحدي يطلب من المستخدم نطق جملة معينة.
+
+```python
+from InnoCaptcha.voice import VoiceCaptcha
+
+vc = VoiceCaptcha(language='ar-EG') # دعم اللغة العربية
+id = vc.create() # يولد جملة عشوائية
+# ... بعد تسجيل المستخدم للصوت ...
+audio_bytes = open("user_voice.wav", "rb").read()
+is_correct = vc.verify(audio_bytes)
+```
+
+### 5. كابتشا الصور (Image CAPTCHA)
+تحديد المربعات التي تحتوي على كائن معين باستخدام الذكاء الاصطناعي.
+
+```python
+from InnoCaptcha.image import ImageCaptcha
+
+img_cap = ImageCaptcha()
+img_cap.create()
+img_cap.save("grid_image.png")
+
+# إدخال أرقام المربعات (مثال: "1,2,5")
+print(img_cap.verify("1,2,5"))
 ```
 
 ---
 
-## التحديثات الجديدة في إصدار 2.2.0
+## 🆙 أحدث التحديثات (الإصدار 2.2.x)
 
-- **الأمان:** تم إلغاء استخدام `eval()` واستبداله بآلية حسابية آمنة.
-- **الخصوصية:** تم حذف نظام تتبع التحليلات (Telemetry) لضمان خصوصية المستخدم بالكامل.
-- **اللغة العربية:** دعم أولي للغة العربية في التوثيق والرسائل.
-- **استقرار النظام:** تحسين إدارة قواعد البيانات وحماية المسارات.
+- **وحدة جديدة**: إضافة `VoiceCaptcha` لتحديات التعرف على الكلام.
+- **الأمان**:
+  - تفعيل خاصية **IP and Session binding** لضمان أن من أنشأ الكابتشا هو من يقوم بحلها.
+  - توحيد مسار قواعد البيانات في `InnoCaptcha/data/dbs/`.
+- **الأداء**: تحسين خيوط المعالجة (threads) الخاصة بتنظيف البيانات القديمة.
+- **البرمجة**: تنسيق الكود بالكامل واستخدام معايير احترافية (2 spaces indentation).
 
 ---
 
-## الترخيص
+## 📜 المتطلبات
 
-MIT — [InnoSoft Company](https://github.com/InnoSoft-Company)
+- بايثون 3.9 أو أحدث.
+- المكتبات المطلوبة: `Pillow`, `numpy`, `scipy`, `ultralytics`, `opencv-python`, `pydub`, `SpeechRecognition`.
+
+---
+
+## 📄 الترخيص
+
+MIT © [InnoSoft Company](https://github.com/InnoSoft-Company)

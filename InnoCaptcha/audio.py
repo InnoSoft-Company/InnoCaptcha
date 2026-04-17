@@ -7,10 +7,6 @@ import numpy as np
 
 key = Fernet.generate_key()
 
-with DB() as db:
-  db.execute("CREATE TABLE IF NOT EXISTS  (id TEXT PRIMARY KEY, answer TEXT, attempts INTEGER, ip_address TEXT, session_id TEXT, created_at TIMESTAMP, expires_at TIMESTAMP)")
-  db.commit()
-
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
 
 def read_wav(path):
