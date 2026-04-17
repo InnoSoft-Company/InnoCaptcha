@@ -1,18 +1,12 @@
-import os, secrets, threading
-from PIL.ImageFilter import SMOOTH
-from PIL import Image, ImageFont
-from PIL.Image import Resampling
-from PIL.ImageDraw import Draw
-from .utils import DB, log_event
+from .utils import DB, DB_PATH, log_event
 from cryptography.fernet import Fernet
-
-# Arabic support libraries
-try:
-  import arabic_reshaper
-  from bidi.algorithm import get_display
-  HAS_ARABIC_LIBS = True
-except ImportError:
-  HAS_ARABIC_LIBS = False
+from bidi.algorithm import get_display
+from PIL.ImageFilter import SMOOTH
+from PIL.Image import Resampling
+from PIL import Image, ImageFont
+import os, secrets, threading
+from PIL.ImageDraw import Draw
+import arabic_reshaper
 
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
@@ -42,7 +36,7 @@ class TextCaptcha():
     threading.Thread(target=self.cleanup, daemon=True).start()
     
   def cleanup(self):
-    with DB() as db:
+    with DB(db_path=DB_PATH) as db:
       db.execute("DELETE FROM text WHERE expires_at < datetime('now')")
       db.commit()
 
@@ -56,18 +50,22 @@ class TextCaptcha():
       chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     
-    with DB() as db:
-      db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
-                 (self.id, self.chars, ip, session_id))
+    with DB(db_path=DB_PATH) as db:
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        self.chars = fernet.encrypt(self.chars.encode())
+      db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, self.chars, ip, session_id))
       db.commit()
-    
+
     log_event("CAPTCHA_CREATED", f"Text captcha created: {self.id}", {"module": "text", "ip": ip, "session": session_id})
         
     font = get_font(40)
     
     # RTL support for Arabic
     display_text = self.chars
-    if self.lang == 'ar' and HAS_ARABIC_LIBS:
+    if self.lang == 'ar':
       reshaped_text = arabic_reshaper.reshape(self.chars)
       display_text = get_display(reshaped_text)
         
@@ -111,15 +109,12 @@ class TextCaptcha():
     return self.id
 
   def save(self, path):
-    if self.image is None:
-      raise ValueError("No captcha created.")
+    if self.image is None: raise ValueError("No captcha created.")
     self.image.save(path)
 
   def verify(self, user_input, ip=None, session_id=None):
-    if not self.id:
-      raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
-      
-    with DB() as db:
+    if not self.id: raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
+    with DB(db_path=DB_PATH) as db:
       db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM text WHERE id = ?", (self.id,))
       result = db.fetchone()
       if not result:
@@ -127,7 +122,13 @@ class TextCaptcha():
         return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
           
       answer, attempts, expires_at, db_ip, db_session = result
-
+      
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        answer = fernet.decrypt(answer)
+        
       # Context Binding Validation (#5)
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "text", "ip": ip, "db_ip": db_ip})
