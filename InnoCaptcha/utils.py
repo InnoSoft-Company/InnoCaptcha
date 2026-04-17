@@ -13,20 +13,11 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # Setup Logging
 def setup_logging():
   log_file = os.path.join(LOG_DIR, f"innocaptcha_{datetime.now().strftime('%Y-%m-%d')}.log")
-  logging.basicConfig(
-    filename=log_file,
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-  )
+  logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 def log_event(event_type, message, metadata=None):
   setup_logging()
-  entry = {
-    "event": event_type,
-    "msg": message,
-    "meta": metadata or {}
-  }
+  entry = {"event": event_type, "msg": message, "meta": metadata or {}}
   logging.info(json.dumps(entry))
 
 class DB:
