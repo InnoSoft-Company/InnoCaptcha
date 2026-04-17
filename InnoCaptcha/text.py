@@ -5,6 +5,7 @@ from PIL.Image import Resampling
 from PIL.ImageDraw import Draw
 from .utils import DB, log_event
 from cryptography.fernet import Fernet
+
 # Arabic support libraries
 try:
   import arabic_reshaper
