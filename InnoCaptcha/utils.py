@@ -1,5 +1,6 @@
 import sqlite3, os, logging, json
 from datetime import datetime
+from cryptography.fernet import Fernet
 
 # Centralized paths
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -50,6 +51,11 @@ class DB:
       if 'session_id' not in columns:
         try: self.cursor.execute(f"ALTER TABLE {table} ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError: pass
+    
+    # Encryption key table
+    self.cursor.execute("""CRETE TABLE IF NOT EXISTS encryption_key (value TEXT)""")
+    key = Fernet.generate_key()
+    self.cursor.execute("INSERT INTO encryption_key (value) VALUES (?)", (key,))
     self.conn.commit()
 
   def __enter__(self): return self

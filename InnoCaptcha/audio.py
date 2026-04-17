@@ -2,6 +2,7 @@ from scipy.signal import butter, lfilter
 from cryptography.fernet import Fernet
 import os, secrets, threading, wave
 from .utils import DB, log_event
+from scipy.signal import butter
 import numpy as np
 
 key = Fernet.generate_key()

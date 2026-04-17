@@ -12,14 +12,7 @@ authors = [
     { name = "InnoSoft Company", email = "midoghanam@hotmail.com" }
 ]
 license = { file = "LICENSE" }
-keywords = [
-    "captcha",
-    "image",
-    "security",
-    "bot-protection",
-    "text-captcha", "math-captcha", 'audio-captcha', 
-    "plugin"
-]
+keywords = ["captcha", "image", "security", "bot-protection", "text-captcha", "math-captcha", 'audio-captcha', "plugin",]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -34,23 +27,13 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
     "Typing :: Typed",
 ]
-dependencies = [
-    "Pillow",
-    "ultralytics",
-    "scipy",
-    "numpy",
-    "opencv-python",
-    "requests",
-    "arabic-reshaper",
-    "python-bidi",
-    "pydub",
-    "SpeechRecognition",
-]
+dependencies = ["Pillow", "ultralytics", "scipy", "cryptography", "numpy", "opencv-python", "requests", "arabic-reshaper", "python-bidi", "pydub", "SpeechRecognition"]
 
 [project.urls]
 "Source Code" = "https://github.com/InnoSoft-Company/InnoCaptcha"
 "Bug Tracker" = "https://github.com/InnoSoft-Company/InnoCaptcha/issues"
-"Documentation" = "https://github.com/InnoSoft-Company/InnoCaptcha#readme"
+"EN_Documentation" = "https://github.com/InnoSoft-Company/InnoCaptcha#readme"
+"AR_Documentation" = "https://github.com/InnoSoft-Company/InnoCaptcha/blob/main/README_AR.md"
 
 [tool.setuptools]
 packages = { find = {} }
