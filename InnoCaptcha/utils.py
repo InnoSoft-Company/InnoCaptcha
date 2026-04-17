@@ -42,7 +42,6 @@ class DB:
           expires_at DATETIME
         )
       """)
-      # Migration: Check for missing columns (for existing v2.2.0 DBs)
       self.cursor.execute(f"PRAGMA table_info({table})")
       columns = [row[1].lower() for row in self.cursor.fetchall()]
       if 'ip_address' not in columns:
@@ -53,18 +52,13 @@ class DB:
         except sqlite3.OperationalError: pass
     self.conn.commit()
 
-  def __enter__(self):
-    return self
+  def __enter__(self): return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    if self.conn:
-      self.conn.close()
+    if self.conn: self.conn.close()
 
-  def execute(self, query, params=()):
-    self.cursor.execute(query, params)
+  def execute(self, query, params=()): self.cursor.execute(query, params)
 
-  def commit(self):
-    self.conn.commit()
+  def commit(self): self.conn.commit()
 
-  def fetchone(self):
-    return self.cursor.fetchone()
+  def fetchone(self): return self.cursor.fetchone()

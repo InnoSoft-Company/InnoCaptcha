@@ -62,7 +62,7 @@ class VoiceCaptcha():
         return "Security context mismatch" if self.lang_code == 'en' else "خطأ في التحقق من المصدر"
       if attempts >= 5:
         log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "voice", "ip": ip})
-        return "Max attempts reached" if self.lang_code == 'en' else "تجاوزت عدد المحاولات
+        return "Max attempts reached" if self.lang_code == 'en' else "تجاوزت عدد المحاولات"
       db.execute("SELECT 1 FROM voice WHERE id = ? AND expires_at >= datetime('now')", (self.id,))
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "voice", "ip": ip})
