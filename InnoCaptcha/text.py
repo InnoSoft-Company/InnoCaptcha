@@ -43,41 +43,28 @@ class TextCaptcha():
     self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
-    
-    # 1. توليد النص الأصلي الخام
-    if not chars: 
-      chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
-    raw_text = "".join(chars[0:6])
-    
-    # 2. التشفير للتخزين في قاعدة البيانات فقط
-    db_answer = raw_text
+    if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
+    self.chars = "".join(chars[0:6])
+    db_answer = self.chars
     with DB(db_path=DB_PATH) as db:
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        db_answer = fernet.encrypt(raw_text.encode()) # هنا يتم التشفير
-      
+        db_answer = fernet.encrypt(self.chars.encode())
       db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, db_answer, ip, session_id))
       db.commit()
-
     log_event("CAPTCHA_CREATED", f"Text captcha created: {self.id}", {"module": "text", "ip": ip, "session": session_id})
-        
     font = get_font(40)
-    
-    # 3. معالجة النص الأصلي (raw_text) للرسم وليس النص المشفر
-    display_text = raw_text
+    display_text = self.chars
     if self.lang == 'ar':
-      reshaped_text = arabic_reshaper.reshape(raw_text)
+      reshaped_text = arabic_reshaper.reshape(self.chars)
       display_text = get_display(reshaped_text)
-        
     for char in display_text:
       temp_image = Image.new('RGBA', (1, 1))
       temp_draw = Draw(temp_image)
-      try: 
-        left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
-      except AttributeError: 
-        w, h = font.getsize(char)
+      try: left, top, w, h = temp_draw.multiline_textbbox((0, 0), char, font=font)
+      except AttributeError: w, h = font.getsize(char)
           
       im = Image.new('RGBA', (max(1, int(w)), max(1, int(h))))
       Draw(im).text((0, 0), char, font=font, fill=self.text_color)   
@@ -87,7 +74,7 @@ class TextCaptcha():
       im = im.rotate(angle, Resampling.BILINEAR, expand=True)
       self.char_images.append(im)
       
-    # إضافة التشويش (نقاط وخطوط)
+    # Add noise
     for dot in range(30):
       x1 = secrets.randbelow(self.image_width)
       y1 = secrets.randbelow(self.image_height)
@@ -109,6 +96,7 @@ class TextCaptcha():
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
     self.image = self.image.filter(SMOOTH)
+    del self.chars  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
@@ -126,12 +114,12 @@ class TextCaptcha():
           
       answer, attempts, expires_at, db_ip, db_session = result
       
-      # فك التشفير للمقارنة
+      # Encrypting user input for secure comparison
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        # تحويل النتيجة المفكوكة إلى string للمقارنة
+        
         answer = fernet.decrypt(answer).decode()
         
       # Context Binding Validation
@@ -148,8 +136,6 @@ class TextCaptcha():
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "text", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
-
-      # استخدام المقارنة الآمنة زمنياً (Timing Safe Comparison)
       if secrets.compare_digest(user_input, answer):
         db.execute("DELETE FROM text WHERE id = ?", (self.id,))
         db.commit()

@@ -7,10 +7,6 @@ import numpy as np
 
 key = Fernet.generate_key()
 
-with DB() as db:
-  db.execute("CREATE TABLE IF NOT EXISTS  (id TEXT PRIMARY KEY, answer TEXT, attempts INTEGER, ip_address TEXT, session_id TEXT, created_at TIMESTAMP, expires_at TIMESTAMP)")
-  db.commit()
-
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
 
 def read_wav(path):
@@ -42,7 +38,12 @@ class AudioCaptcha:
     self.chars = "".join(chars[0:6])
     self.id = secrets.token_hex(16)
     with DB() as db:
-      db.execute("INSERT INTO audio (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, self.chars, ip, session_id))
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        db_answer = fernet.encrypt(self.chars.encode())
+      db.execute("INSERT INTO audio (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, db_answer, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Audio captcha created: {self.id}", {"module": "audio", "ip": ip, "session": session_id})
     silence = np.zeros(9000, dtype=np.float32)
@@ -63,6 +64,7 @@ class AudioCaptcha:
     combined = np.concatenate(parts).astype(np.float32) * (0.5 + secrets.randbits(8) / 255 * 0.2)
     b, a = butter(2, 3400 / (44100 / 2), btype='low')
     self.audio = lfilter(b, a, combined)
+    del self.chars  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
@@ -84,6 +86,14 @@ class AudioCaptcha:
         log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "audio", "ip": ip})
         return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
       answer, attempts, expires_at, db_ip, db_session = result
+      
+      # Decrypt the stored answer for comparison
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        answer = fernet.decrypt(answer).decode()
+
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "audio", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"

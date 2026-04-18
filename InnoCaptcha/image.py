@@ -3,6 +3,7 @@ from ultralytics import YOLO
 from PIL import Image
 import numpy as np
 from .utils import DB, log_event
+from cryptography.fernet import Fernet
 
 images_dir = os.path.join(os.path.dirname(__file__), 'data', 'images')
 
@@ -56,10 +57,15 @@ class ImageCaptcha:
       for grid_num, (gx1, gy1, gx2, gy2) in grid_mapping.items():
         if not (x2 < gx1 or x1 > gx2 or y2 < gy1 or y1 > gy2):
           correct_grids.add(grid_num)
-        
+    answer = ",".join(map(str, sorted(correct_grids)))
     with DB() as db:
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        answer = fernet.encrypt(answer.encode())
       db.execute("INSERT INTO image (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
-                 (self.id, ",".join(map(str, sorted(correct_grids))), ip, session_id))
+                 (self.id, answer, ip, session_id))
       db.commit()
     
     log_event("CAPTCHA_CREATED", f"Image captcha created: {self.id}", {"module": "image", "ip": ip, "session": session_id})
@@ -79,7 +85,14 @@ class ImageCaptcha:
       
       answer, attempts, expires_at, db_ip, db_session = result
 
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        
+        answer = fernet.decrypt(answer).decode()
       # Context Binding Validation (#5)
+      print(f"Answer from DB: {answer}, User Input: {user_input}, DB IP: {db_ip}, User IP: {ip}, DB Session: {db_session}, User Session: {session_id}")  # Debug statement
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "image", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
