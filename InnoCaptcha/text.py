@@ -74,7 +74,7 @@ class TextCaptcha():
       im = im.rotate(angle, Resampling.BILINEAR, expand=True)
       self.char_images.append(im)
       
-    # إضافة التشويش (نقاط وخطوط)
+    # Add noise
     for dot in range(30):
       x1 = secrets.randbelow(self.image_width)
       y1 = secrets.randbelow(self.image_height)
@@ -96,7 +96,7 @@ class TextCaptcha():
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
     self.image = self.image.filter(SMOOTH)
-    del self.chars
+    del self.chars  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
@@ -114,12 +114,12 @@ class TextCaptcha():
           
       answer, attempts, expires_at, db_ip, db_session = result
       
-      # فك التشفير للمقارنة
+      # Encrypting user input for secure comparison
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        # تحويل النتيجة المفكوكة إلى string للمقارنة
+        
         answer = fernet.decrypt(answer).decode()
         
       # Context Binding Validation
@@ -136,8 +136,6 @@ class TextCaptcha():
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "text", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
-
-      # استخدام المقارنة الآمنة زمنياً (Timing Safe Comparison)
       if secrets.compare_digest(user_input, answer):
         db.execute("DELETE FROM text WHERE id = ?", (self.id,))
         db.commit()

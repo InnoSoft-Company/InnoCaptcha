@@ -2,6 +2,7 @@ import os, secrets, threading, io, speech_recognition as sr
 from pydub.effects import normalize
 from .utils import DB, log_event
 from pydub import AudioSegment
+from cryptography.fernet import Fernet
 
 phrases_en = [
   "the quick brown fox jumps over the lazy dog",
@@ -41,6 +42,12 @@ class VoiceCaptcha():
       self.phrase = secrets.choice(phrases)
     else: self.phrase = phrase    
     with DB() as db:
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        self.phrase = fernet.encrypt(self.phrase.encode())
+
       db.execute("""INSERT INTO voice (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))""", (self.id, self.phrase, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Voice captcha created: {self.id}", {"module": "voice", "ip": ip, "session": session_id})
@@ -56,6 +63,12 @@ class VoiceCaptcha():
         log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "voice", "ip": ip})
         return "Captcha not found" if self.lang_code == 'en' else "الكابتشا غير موجودة"
       answer, attempts, expires_at, db_ip, db_session = result
+      # Encrypting user input for secure comparison
+      db.execute("SELECT value FROM encryption_key limit 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        answer = fernet.decrypt(answer).decode()
       # Context Binding Validation (#5)
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "voice", "ip": ip, "db_ip": db_ip})

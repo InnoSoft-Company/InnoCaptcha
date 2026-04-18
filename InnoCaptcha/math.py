@@ -1,7 +1,8 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
 import math, os, secrets, threading, operator, random
-from .utils import DB, log_event
+from .utils import DB, log_event, DB_PATH
+from cryptography.fernet import Fernet
 
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
 
@@ -126,9 +127,15 @@ class MathCaptcha:
     self.question = f'{num1}{op}{num2}'
     self.answer = str(operators[op](num1, num2))
     
-    with DB() as db:
-      db.execute("INSERT INTO math (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
-                 (self.id, self.answer, ip, session_id))
+    with DB(db_path=DB_PATH) as db:
+      # Get encryption key for session binding
+      db.execute("SELECT value FROM encryption_key lIMIT 1")
+      key = db.fetchone()
+      if key:
+        key = key[0]
+        fernet = Fernet(key)
+        self.answer = fernet.encrypt(self.answer.encode())
+      db.execute("INSERT INTO math (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.answer, ip, session_id))
       db.commit()
     
     log_event("CAPTCHA_CREATED", f"Math captcha created: {self.id}", {"module": "math", "ip": ip, "session": session_id})
@@ -171,6 +178,13 @@ class MathCaptcha:
       
       answer, attempts, expires_at, db_ip, db_session = result
       
+      # Get encryption key for session binding
+      db.execute("SELECT value FROM encryption_key lIMIT 1")
+      key = db.fetchone()
+      if key:
+        fernet = Fernet(key[0])
+        answer = fernet.decrypt(answer).decode()
+        
       # Context Binding Validation (#5)
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "math", "ip": ip, "db_ip": db_ip})
