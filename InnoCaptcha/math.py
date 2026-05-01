@@ -1,6 +1,6 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
-import math, os, secrets, threading, operator, random
+import math, os, secrets, threading, operator
 from .utils import DB, log_event, DB_PATH
 from cryptography.fernet import Fernet
 
@@ -8,24 +8,26 @@ font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts"
 
 class MathCaptcha:
   def __init__(self, output="text", lang='en'):
-    if output not in ("text", "image"): raise ValueError("output must be 'text' or 'image'")
+    if output not in ("text", "image"):
+      raise ValueError("output must be 'text' or 'image'")
     self.output = output
     self.lang = lang
     self.question = None
     self.answer = None
     self.id = None
     self.image = None
-    self.create() # Backward compatibility
-    threading.Thread(target=self.cleanup, daemon=True).start()
 
   def _load_font(self, size):
     try:
       font_files = [f for f in os.listdir(font_dir) if f.endswith(".ttf")]
-      if font_files: return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
-    except Exception: pass
+      if font_files:
+        return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
+    except:
+      pass
     return ImageFont.load_default()
 
-  def _text_bbox(self, text, font): return ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
+  def _text_bbox(self, text, font):
+    return ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
 
   def _tokenize_question(self):
     tokens, current = [], []
@@ -37,16 +39,12 @@ class MathCaptcha:
         tokens.append("".join(current))
         current.clear()
       tokens.append(char)
-    if current: tokens.append("".join(current))
+    if current:
+      tokens.append("".join(current))
     tokens.extend(["=", "?"])
     return tokens
 
-  def _build_palette(self): 
-    return {
-      "background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), 
-      "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), 
-      "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45))
-    }
+  def _build_palette(self): return {"background": (235 + secrets.randbelow(16), 235 + secrets.randbelow(16), 235 + secrets.randbelow(16)), "text": (15 + secrets.randbelow(45), 15 + secrets.randbelow(45) + secrets.randbelow(20), 15 + secrets.randbelow(45) + secrets.randbelow(20)), "noise": (135 + secrets.randbelow(45), 135 + secrets.randbelow(45), 135 + secrets.randbelow(45)) }
 
   def _render_token(self, token, palette):
     font = self._load_font(36 + secrets.randbelow(8))
@@ -71,14 +69,12 @@ class MathCaptcha:
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     width, height = image.size
-
     for _ in range(max(70, (width * height) // 220)):
       x = secrets.randbelow(width)
       y = secrets.randbelow(height)
       radius = secrets.randbelow(2) + 1
       color = tuple(min(255, channel + secrets.randbelow(30)) for channel in palette["background"])
       draw.ellipse((x, y, x + radius, y + radius), fill=color + (55,))
-
     for _ in range(4):
       x1 = secrets.randbelow(width)
       y1 = secrets.randbelow(height)
@@ -88,8 +84,10 @@ class MathCaptcha:
       end = min(359, start + 90 + secrets.randbelow(180))
       left, right = sorted((x1, x2))
       top, bottom = sorted((y1, y2))
-      if left == right: right += 1
-      if top == bottom: bottom += 1
+      if left == right:
+        right += 1
+      if top == bottom:
+        bottom += 1
       curve_color = tuple(max(0, min(255, channel + secrets.randbelow(30) - 15)) for channel in palette["noise"])
       draw.arc((left, top, right, bottom), start, end, fill=curve_color + (95,), width=1)
     return Image.alpha_composite(image.convert("RGBA"), overlay)
@@ -125,19 +123,16 @@ class MathCaptcha:
     num2 = secrets.randbelow(10) + 1
     if op == "-" and num1 < num2: num1, num2 = num2, num1
     self.question = f'{num1}{op}{num2}'
-    self.answer = str(operators[op](num1, num2))
-    
+    raw_answer = str(operators[op](num1, num2))
     with DB(db_path=DB_PATH) as db:
-      # Get encryption key for session binding
       db.execute("SELECT value FROM encryption_key LIMIT 1")
       key = db.fetchone()
       if key:
-        key = key[0]
-        fernet = Fernet(key)
-        self.answer = fernet.encrypt(self.answer.encode())
+        fernet = Fernet(key[0])
+        self.answer = fernet.encrypt(raw_answer.encode())
+      else: self.answer = raw_answer
       db.execute("INSERT INTO math (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.answer, ip, session_id))
       db.commit()
-    
     log_event("CAPTCHA_CREATED", f"Math captcha created: {self.id}", {"module": "math", "ip": ip, "session": session_id})
     if self.output == "image": self._render_image()
     return self.id
@@ -155,8 +150,10 @@ class MathCaptcha:
       y = max(6, min(height - token_image.height - 6, baseline + secrets.randbelow(9) - 4))
       image.alpha_composite(token_image, (x, y))
       extra_gap = 8 if token_image.width > 28 else 0
-      if index >= len(token_images) - 2: extra_gap += 4
+      if index >= len(token_images) - 2:
+        extra_gap += 4
       x += token_image.width + gap + extra_gap
+
     image = self._draw_interference(image, palette)
     image = self._apply_wave_distortion(image, palette["background"])
     self.image = image.filter(ImageFilter.SMOOTH)
@@ -166,58 +163,41 @@ class MathCaptcha:
     return f"{self.question} = ?"
 
   def verify(self, user_answer, ip=None, session_id=None):
-    if not self.id:
-      raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
-      
-    with DB(DB_PATH) as db:
+    if not self.id: raise RuntimeError("Call create() first")
+    with DB() as db:
       db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM math WHERE id = ?", (self.id,))
       result = db.fetchone()
       if not result:
         log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "math", "ip": ip})
         return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
-      
       answer, attempts, expires_at, db_ip, db_session = result
-      
-      # Get encryption key for session binding
       db.execute("SELECT value FROM encryption_key LIMIT 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        try:
-          answer = fernet.decrypt(answer).decode()
-        except Exception:
-          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "math"})
-          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
         answer = fernet.decrypt(answer).decode()
-        
-      # Context Binding Validation (#5)
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
-        log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "math", "ip": ip, "db_ip": db_ip})
+        log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "math", "ip": ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
-
-      # Rate Limiting & Expiry (#4)
       if attempts >= 5:
         log_event("VERIFY_REJECTED", f"Max attempts reached: {self.id}", {"module": "math", "ip": ip})
         return "Max attempts reached" if self.lang == 'en' else "تجاوزت عدد المحاولات"
-      
-      # Expiry check logic (DB might return expired)
       db.execute("SELECT 1 FROM math WHERE id = ? AND expires_at >= datetime('now')", (self.id,))
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "math", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
-
       if secrets.compare_digest(str(answer), str(user_answer)):
         db.execute("DELETE FROM math WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "math", "ip": ip})
         return True
-        
       db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
       db.commit()
-      log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "math", "ip": ip, "attempt": attempts+1})
+      log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "math", "ip": ip, "attempt": attempts + 1})
     return False
 
-  def cleanup(self):
-    with DB(DB_PATH) as db:
+  @staticmethod
+  def cleanup():
+    with DB() as db:
       db.execute("DELETE FROM math WHERE expires_at < datetime('now')")
       db.commit()
