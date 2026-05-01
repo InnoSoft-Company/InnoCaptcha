@@ -129,7 +129,7 @@ class MathCaptcha:
     
     with DB(db_path=DB_PATH) as db:
       # Get encryption key for session binding
-      db.execute("SELECT value FROM encryption_key lIMIT 1")
+      db.execute("SELECT value FROM encryption_key LIMIT 1")
       key = db.fetchone()
       if key:
         key = key[0]
@@ -169,7 +169,7 @@ class MathCaptcha:
     if not self.id:
       raise RuntimeError("Captcha not created" if self.lang == 'en' else "لم يتم إنشاء الكابتشا")
       
-    with DB() as db:
+    with DB(DB_PATH) as db:
       db.execute("SELECT answer, attempts, expires_at, ip_address, session_id FROM math WHERE id = ?", (self.id,))
       result = db.fetchone()
       if not result:
@@ -179,10 +179,15 @@ class MathCaptcha:
       answer, attempts, expires_at, db_ip, db_session = result
       
       # Get encryption key for session binding
-      db.execute("SELECT value FROM encryption_key lIMIT 1")
+      db.execute("SELECT value FROM encryption_key LIMIT 1")
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
+        try:
+          answer = fernet.decrypt(answer).decode()
+        except Exception:
+          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "math"})
+          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
         answer = fernet.decrypt(answer).decode()
         
       # Context Binding Validation (#5)
@@ -213,6 +218,6 @@ class MathCaptcha:
     return False
 
   def cleanup(self):
-    with DB() as db:
+    with DB(DB_PATH) as db:
       db.execute("DELETE FROM math WHERE expires_at < datetime('now')")
       db.commit()

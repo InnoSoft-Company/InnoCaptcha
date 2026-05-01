@@ -15,11 +15,11 @@ class ImageCaptcha:
 
   def __init__(self, lang='en'):
     self.lang = lang
-    self.model = YOLO(os.path.join('InnoCaptcha', 'data', 'models', 'yolo11n.pt'))
+    MODEL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'models', 'yolo11n.pt')
+    self.model = YOLO(MODEL_PATH)
     classes = sorted(os.listdir(images_dir))
     if not classes:
       raise FileNotFoundError("No image classes found in data/images")
-            
     self.image_class = secrets.choice(classes)
     d = os.path.join(images_dir, self.image_class)
     self.image_path = os.path.join(d, secrets.choice(sorted(os.listdir(d))))
@@ -89,10 +89,12 @@ class ImageCaptcha:
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        
-        answer = fernet.decrypt(answer).decode()
+        try:
+          answer = fernet.decrypt(answer).decode()
+        except Exception:
+          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "image"})
+          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
       # Context Binding Validation (#5)
-      print(f"Answer from DB: {answer}, User Input: {user_input}, DB IP: {db_ip}, User IP: {ip}, DB Session: {db_session}, User Session: {session_id}")  # Debug statement
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "image", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
@@ -107,7 +109,7 @@ class ImageCaptcha:
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "image", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
 
-      if user_input == answer:
+      if secrets.compare_digest(str(user_input), str(answer)):
         db.execute("DELETE FROM image WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "image", "ip": ip})

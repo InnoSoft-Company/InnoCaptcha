@@ -18,12 +18,16 @@ def get_font(size=40):
   return ImageFont.load_default()
 
 class TextCaptcha():
-  def __init__(self, color=(0, 0, 0), background=(255, 255, 255), width=300, height=80, lang='en'):
+  def __init__(self, color=None, background=None, width=300, height=80, lang='en'):
     self.lang = lang
-    base = secrets.randbelow(101) + 80
-    shift = (secrets.randbelow(56) + 45) * (1 - 2 * secrets.randbelow(2))
-    self.background = (base, secrets.randbelow(101) + 80, secrets.randbelow(101) + 80)
-    self.text_color = tuple(max(0, min(255, c + shift)) for c in self.background)
+    if color and background:
+      self.text_color = color
+      self.background = background
+    else:
+      base = secrets.randbelow(101) + 80
+      shift = (secrets.randbelow(56) + 45) * (1 - 2 * secrets.randbelow(2))
+      self.background = (base, secrets.randbelow(101) + 80, secrets.randbelow(101) + 80)
+      self.text_color = tuple(max(0, min(255, c + shift)) for c in self.background)
     self.image_width = width
     self.image_height = height
     self.id = None
@@ -119,9 +123,12 @@ class TextCaptcha():
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        
-        answer = fernet.decrypt(answer).decode()
-        
+        try:
+          answer = fernet.decrypt(answer).decode()
+        except Exception:
+          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "text"})
+          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
+
       # Context Binding Validation
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "text", "ip": ip, "db_ip": db_ip})

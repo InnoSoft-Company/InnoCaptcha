@@ -68,7 +68,11 @@ class VoiceCaptcha():
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        answer = fernet.decrypt(answer).decode()
+        try:
+          answer = fernet.decrypt(answer).decode()
+        except Exception:
+          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "voice"})
+          return "Captcha verification error" if self.lang_code == 'en' else "خطأ في التحقق"
       # Context Binding Validation (#5)
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "voice", "ip": ip, "db_ip": db_ip})
@@ -91,7 +95,14 @@ class VoiceCaptcha():
             with sr.AudioFile(wav_io) as source:
               audio_data = self.recognizer.record(source)
               transcript = self.recognizer.recognize_google(audio_data, language=self.language)
-        except Exception: pass
+        except sr.UnknownValueError:
+          return "Could not understand audio. Please try again."
+        except sr.RequestError as e:
+          log_event("STT_ERROR", f"Google STT failed: {e}", {"module": "voice"})
+          return "Speech service unavailable. Please try again."
+        except Exception as e:
+          log_event("STT_ERROR", f"Unexpected STT error: {e}", {"module": "voice"})
+          return "Verification error."
       if transcript and secrets.compare_digest(transcript.lower().strip(), answer.lower().strip()):
         db.execute("DELETE FROM voice WHERE id = ?", (self.id,))
         db.commit()

@@ -2,10 +2,7 @@ from scipy.signal import butter, lfilter
 from cryptography.fernet import Fernet
 import os, secrets, threading, wave
 from .utils import DB, log_event
-from scipy.signal import butter
 import numpy as np
-
-key = Fernet.generate_key()
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
 
@@ -34,9 +31,15 @@ class AudioCaptcha:
       db.commit()
 
   def create(self, chars=None, ip=None, session_id=None):
-    if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
-    self.chars = "".join(chars[0:6])
+    if chars:
+      if not all(isinstance(c, str) and len(c) == 1 for c in chars):
+        raise ValueError("Invalid chars list")
+    else:
+      chars = [secrets.choice('abcdefghjklmnpqrstuvwxyz23456789') for _ in range(6)]
+
+    self.chars = "".join(chars[:6])
     self.id = secrets.token_hex(16)
+    db_answer = self.chars  # default: unencrypted fallback
     with DB() as db:
       db.execute("SELECT value FROM encryption_key limit 1")
       key = db.fetchone()
@@ -92,7 +95,11 @@ class AudioCaptcha:
       key = db.fetchone()
       if key:
         fernet = Fernet(key[0])
-        answer = fernet.decrypt(answer).decode()
+        try:
+          answer = fernet.decrypt(answer).decode()
+        except Exception:
+          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "audio"})
+          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
 
       if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "audio", "ip": ip, "db_ip": db_ip})

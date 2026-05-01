@@ -39,6 +39,7 @@ setup(
     "python-bidi",
     "pydub",
     "SpeechRecognition",
+    "cryptography"
   ],
   cmdclass={"install": InstallCommand},
   classifiers=[

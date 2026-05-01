@@ -54,10 +54,11 @@ class DB:
     
     # Encryption key table
     self.cursor.execute("""CREATE TABLE IF NOT EXISTS encryption_key (value TEXT)""")
-    key = Fernet.generate_key()
-    self.cursor.execute("INSERT INTO encryption_key (value) VALUES (?)", (key,))
+    self.cursor.execute("SELECT COUNT(*) FROM encryption_key")
+    if self.cursor.fetchone()[0] == 0:
+      key = Fernet.generate_key()
+      self.cursor.execute("INSERT INTO encryption_key (value) VALUES (?)", (key,))
     self.conn.commit()
-
   def __enter__(self): return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
