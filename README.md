@@ -25,8 +25,9 @@
 - 🔐 **Security First**: 
   - Token-based challenge identification.
   - IP and Session binding for verification safety.
-  - Automatic expiration (5 minutes) and attempt limits (5-6 attempts).
-  - Background cleanup for expired challenges.
+  - Automatic expiration (5 minutes) and attempt limits (5 attempts).
+  - Synchronous cleanup for expired challenges to prevent memory leaks.
+  - Secure data encryption via `INNOCAPTCHA_KEY`.
 - 🗄️ **Storage**: Centralized SQLite database management.
 
 ---
@@ -39,6 +40,12 @@ pip install InnoCaptcha
 
 ## 🛠️ Quick Start
 
+**Important**: For production, please set the `INNOCAPTCHA_KEY` environment variable to a secure `Fernet` key to encrypt answers in the database.
+
+```bash
+export INNOCAPTCHA_KEY="your_secure_fernet_key_here"
+```
+
 ### 1. Text CAPTCHA
 Generates a distorted image containing a random string.
 
@@ -46,10 +53,11 @@ Generates a distorted image containing a random string.
 from InnoCaptcha.text import TextCaptcha
 
 captcha = TextCaptcha(width=300, height=80)
-captcha.create("abcd")
+# Pass IP and session ID for context binding
+captcha_id = captcha.create("abcd", ip="127.0.0.1", session_id="abc123xyz")
 captcha.save("captcha.png")
 
-print(captcha.verify("abcd")) # Returns True
+print(captcha.verify("abcd", ip="127.0.0.1", session_id="abc123xyz")) # Returns True
 ```
 
 ### 2. Math CAPTCHA
@@ -59,11 +67,12 @@ Generates arithmetic challenges. Can be output as plain text or a rendered image
 from InnoCaptcha.math import MathCaptcha
 
 # Image-based Math Challenge
-math = MathCaptcha(output="image")
-math.create()
-math.get_question().show() # Returns a PIL Image
+math_cap = MathCaptcha(output="image")
+math_cap.create(ip="127.0.0.1", session_id="abc123xyz")
+math_cap.get_question().show() # Returns a PIL Image
 
-print(math.verify("Answer"))
+# Answer depends on the generated math question
+print(math_cap.verify("12", ip="127.0.0.1", session_id="abc123xyz"))
 ```
 
 ### 3. Audio CAPTCHA
@@ -73,10 +82,10 @@ Generates a WAV file where a voice reads out characters.
 from InnoCaptcha.audio import AudioCaptcha
 
 audio = AudioCaptcha()
-audio.create("x123")
+audio.create("x123", ip="127.0.0.1")
 audio.save("output.wav")
 
-print(audio.verify("x123"))
+print(audio.verify("x123", ip="127.0.0.1"))
 ```
 
 ### 4. Voice CAPTCHA (New!)
@@ -86,10 +95,12 @@ A speech-to-text challenge. The user is given a phrase and must submit a recordi
 from InnoCaptcha.voice import VoiceCaptcha
 
 vc = VoiceCaptcha(language='en-US')
-id = vc.create() # Generates a random phrase
+captcha_id = vc.create(ip="127.0.0.1") 
+print(f"Please read: {vc.phrase}")
+
 # ... User records audio and sends bytes ...
 audio_bytes = open("user_speech.wav", "rb").read()
-is_correct = vc.verify(audio_bytes)
+is_correct = vc.verify(audio_bytes, ip="127.0.0.1")
 ```
 
 ### 5. Image CAPTCHA (YOLOv11)
@@ -99,11 +110,12 @@ Uses YOLOv11 to detect objects in an image and asks the user to select the grid 
 from InnoCaptcha.image import ImageCaptcha
 
 img_cap = ImageCaptcha()
-img_cap.create()
+img_cap.create(ip="127.0.0.1")
 img_cap.save("grid_image.png")
+print(f"Target object to detect: {img_cap.image_class}")
 
 # User inputs cell numbers, e.g., "1,2,5"
-print(img_cap.verify("1,2,5"))
+print(img_cap.verify("1,2,5", ip="127.0.0.1"))
 ```
 
 ---
@@ -120,14 +132,15 @@ print(img_cap.verify("1,2,5"))
 
 ---
 
-## 🆙 Latest Updates (v2.2.x)
+## 🆙 Latest Updates (v2.3.x)
 
-- **New Module**: Added `VoiceCaptcha` for speech-to-text challenges.
-- **Security**: 
-  - Implemented **IP and Session binding** to prevent cross-session replay attacks.
-  - Centralized database management in `InnoCaptcha/data/dbs/`.
-- **Performance**: Optimized background cleanup threads.
-- **Improvements**: Standardized indentation (2 spaces) and removed insecure functions.
+- **New Security & Architecture Audit Fixes**: 
+  - Addressed memory leaks by removing background threading loops per instance.
+  - Patched an SQL injection via `ALLOWED_TABLES` whitelisting.
+  - Eliminated timing attacks across all context verifications using `secrets.compare_digest`.
+  - Moved DB Encryption to require an `INNOCAPTCHA_KEY` variable, keeping the encryption key out of the SQLite DB itself.
+  - Implemented atomic updates for attempt counters to eliminate race conditions.
+  - Optimized `ImageCaptcha` to use a global cached singleton for its `YOLOv11` model, vastly speeding up subsequent initializations.
 
 ---
 

@@ -1,6 +1,6 @@
 import os, secrets, threading, io, speech_recognition as sr
 from pydub.effects import normalize
-from .utils import DB, log_event
+from .utils import DB, log_event, get_encryption_key
 from pydub import AudioSegment
 from cryptography.fernet import Fernet
 
@@ -28,27 +28,25 @@ class VoiceCaptcha():
     self.id = None
     self.phrase = None
     self.recognizer = sr.Recognizer()
-    threading.Thread(target=self.cleanup, daemon=True).start()
-  
+    
   def cleanup(self):
     with DB() as db:
       db.execute("DELETE FROM voice WHERE expires_at < datetime('now')")
       db.commit()
   
   def create(self, phrase=None, ip=None, session_id=None):
+    self.cleanup()
     self.id = secrets.token_hex(16)
     if not phrase:
       phrases = phrases_ar if self.lang_code == 'ar' else phrases_en
       self.phrase = secrets.choice(phrases)
     else: self.phrase = phrase    
     with DB() as db:
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        self.phrase = fernet.encrypt(self.phrase.encode())
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      encrypted_phrase = fernet.encrypt(self.phrase.encode())
 
-      db.execute("""INSERT INTO voice (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))""", (self.id, self.phrase, ip, session_id))
+      db.execute("""INSERT INTO voice (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))""", (self.id, encrypted_phrase, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Voice captcha created: {self.id}", {"module": "voice", "ip": ip, "session": session_id})
     return self.id
@@ -64,17 +62,17 @@ class VoiceCaptcha():
         return "Captcha not found" if self.lang_code == 'en' else "الكابتشا غير موجودة"
       answer, attempts, expires_at, db_ip, db_session = result
       # Encrypting user input for secure comparison
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        try:
-          answer = fernet.decrypt(answer).decode()
-        except Exception:
-          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "voice"})
-          return "Captcha verification error" if self.lang_code == 'en' else "خطأ في التحقق"
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      try:
+        answer = fernet.decrypt(answer).decode()
+      except Exception:
+        log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "voice"})
+        return "Captcha verification error" if self.lang_code == 'en' else "خطأ في التحقق"
       # Context Binding Validation (#5)
-      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+      ip_match = not db_ip or secrets.compare_digest(db_ip, ip or "")
+      session_match = not db_session or secrets.compare_digest(db_session, session_id or "")
+      if not ip_match or not session_match:
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "voice", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang_code == 'en' else "خطأ في التحقق من المصدر"
       if attempts >= 5:
@@ -108,7 +106,7 @@ class VoiceCaptcha():
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "voice", "ip": ip})
         return True
-      db.execute("UPDATE voice SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.execute("UPDATE voice SET attempts = attempts + 1 WHERE id = ? AND attempts < 5", (self.id,))
       db.commit()
       log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "voice", "ip": ip, "attempt": attempts+1})
     return False

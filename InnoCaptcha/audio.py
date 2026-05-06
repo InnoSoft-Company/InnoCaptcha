@@ -1,7 +1,7 @@
 from scipy.signal import butter, lfilter
 from cryptography.fernet import Fernet
-import os, secrets, threading, wave
-from .utils import DB, log_event
+import os, secrets, wave
+from .utils import DB, log_event, get_encryption_key
 import numpy as np
 
 data_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data/audios')
@@ -23,14 +23,14 @@ class AudioCaptcha:
     self.id     = None
     self.chars  = None
     self.audio = None
-    threading.Thread(target=self.cleanup, daemon=True).start()
-
+    
   def cleanup(self):
     with DB() as db:
       db.execute("DELETE FROM audio WHERE expires_at < datetime('now')")
       db.commit()
 
   def create(self, chars=None, ip=None, session_id=None):
+    self.cleanup()
     if chars:
       if not all(isinstance(c, str) and len(c) == 1 for c in chars):
         raise ValueError("Invalid chars list")
@@ -39,13 +39,10 @@ class AudioCaptcha:
 
     self.chars = "".join(chars[:6])
     self.id = secrets.token_hex(16)
-    db_answer = self.chars  # default: unencrypted fallback
+    key = get_encryption_key()
+    fernet = Fernet(key)
+    db_answer = fernet.encrypt(self.chars.encode())
     with DB() as db:
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        db_answer = fernet.encrypt(self.chars.encode())
       db.execute("INSERT INTO audio (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, datetime('now', '+5 minutes'))", (self.id, db_answer, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Audio captcha created: {self.id}", {"module": "audio", "ip": ip, "session": session_id})
@@ -67,7 +64,7 @@ class AudioCaptcha:
     combined = np.concatenate(parts).astype(np.float32) * (0.5 + secrets.randbits(8) / 255 * 0.2)
     b, a = butter(2, 3400 / (44100 / 2), btype='low')
     self.audio = lfilter(b, a, combined)
-    del self.chars  # Remove plaintext answer from memory
+    self.chars = None  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
@@ -91,17 +88,17 @@ class AudioCaptcha:
       answer, attempts, expires_at, db_ip, db_session = result
       
       # Decrypt the stored answer for comparison
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        try:
-          answer = fernet.decrypt(answer).decode()
-        except Exception:
-          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "audio"})
-          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      try:
+        answer = fernet.decrypt(answer).decode()
+      except Exception:
+        log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "audio"})
+        return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
 
-      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+      ip_match = not db_ip or secrets.compare_digest(db_ip, ip or "")
+      session_match = not db_session or secrets.compare_digest(db_session, session_id or "")
+      if not ip_match or not session_match:
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "audio", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
       if attempts >= 5:
@@ -113,13 +110,16 @@ class AudioCaptcha:
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "audio", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
 
-      if secrets.compare_digest(user_input.lower(), answer.lower()):
+      user_input = str(user_input).strip().lower()
+      answer = str(answer).strip().lower()
+
+      if secrets.compare_digest(user_input, answer):
         db.execute("DELETE FROM audio WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "audio", "ip": ip})
         return True
           
-      db.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.execute("UPDATE audio SET attempts = attempts + 1 WHERE id = ? AND attempts < 5", (self.id,))
       db.commit()
       log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "audio", "ip": ip, "attempt": attempts+1})
     return False

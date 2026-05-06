@@ -1,4 +1,4 @@
-from .utils import DB, DB_PATH, log_event
+from .utils import DB, DB_PATH, log_event, get_encryption_key
 from cryptography.fernet import Fernet
 from bidi.algorithm import get_display
 from PIL.ImageFilter import SMOOTH
@@ -35,7 +35,6 @@ class TextCaptcha():
     self.draw = None
     self.chars = None
     self.char_images = []
-    threading.Thread(target=self.cleanup, daemon=True).start()
     
   def cleanup(self):
     with DB(db_path=DB_PATH) as db:
@@ -43,19 +42,17 @@ class TextCaptcha():
       db.commit()
 
   def create(self, chars=None, ip=None, session_id=None):
+    self.cleanup()
     self.char_images.clear()
     self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
     if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
-    db_answer = self.chars
+    key = get_encryption_key()
+    fernet = Fernet(key)
+    db_answer = fernet.encrypt(self.chars.encode())
     with DB(db_path=DB_PATH) as db:
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        db_answer = fernet.encrypt(self.chars.encode())
       db.execute("INSERT INTO text (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))",  (self.id, db_answer, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Text captcha created: {self.id}", {"module": "text", "ip": ip, "session": session_id})
@@ -100,7 +97,7 @@ class TextCaptcha():
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
     self.image = self.image.filter(SMOOTH)
-    del self.chars  # Remove plaintext answer from memory
+    self.chars = None  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
@@ -118,19 +115,18 @@ class TextCaptcha():
           
       answer, attempts, expires_at, db_ip, db_session = result
       
-      # Encrypting user input for secure comparison
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        try:
-          answer = fernet.decrypt(answer).decode()
-        except Exception:
-          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "text"})
-          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      try:
+        answer = fernet.decrypt(answer).decode()
+      except Exception:
+        log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "text"})
+        return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
 
       # Context Binding Validation
-      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+      ip_match = not db_ip or secrets.compare_digest(db_ip, ip or "")
+      session_match = not db_session or secrets.compare_digest(db_session, session_id or "")
+      if not ip_match or not session_match:
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "text", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
 
@@ -143,13 +139,17 @@ class TextCaptcha():
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "text", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
+      # Normalize input for comparison
+      user_input = str(user_input).strip().lower()
+      answer = str(answer).strip().lower()
+
       if secrets.compare_digest(user_input, answer):
         db.execute("DELETE FROM text WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "text", "ip": ip})
         return True
       else:
-        db.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+        db.execute("UPDATE text SET attempts = attempts + 1 WHERE id = ? AND attempts < 5", (self.id,))
         db.commit()
         log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "text", "ip": ip, "attempt": attempts+1})
     return False

@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling, Transform
 import math, os, secrets, threading, operator
-from .utils import DB, log_event, DB_PATH
+from .utils import DB, log_event, DB_PATH, get_encryption_key
 from cryptography.fernet import Fernet
 
 font_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), "data/fonts")
@@ -116,6 +116,7 @@ class MathCaptcha:
     return vertical.crop((pad, pad, pad + width, pad + height)).convert("RGB")
 
   def create(self, ip=None, session_id=None):
+    self.cleanup()
     self.id = secrets.token_hex(16)
     operators = {"+": operator.add, "-": operator.sub, "×": operator.mul}
     op = secrets.choice(["+", "-", "×"])
@@ -125,12 +126,9 @@ class MathCaptcha:
     self.question = f'{num1}{op}{num2}'
     raw_answer = str(operators[op](num1, num2))
     with DB(db_path=DB_PATH) as db:
-      db.execute("SELECT value FROM encryption_key LIMIT 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        self.answer = fernet.encrypt(raw_answer.encode())
-      else: self.answer = raw_answer
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      self.answer = fernet.encrypt(raw_answer.encode())
       db.execute("INSERT INTO math (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", (self.id, self.answer, ip, session_id))
       db.commit()
     log_event("CAPTCHA_CREATED", f"Math captcha created: {self.id}", {"module": "math", "ip": ip, "session": session_id})
@@ -171,12 +169,17 @@ class MathCaptcha:
         log_event("VERIFY_ABORT", f"Captcha not found: {self.id}", {"module": "math", "ip": ip})
         return "Captcha not found" if self.lang == 'en' else "الكابتشا غير موجودة"
       answer, attempts, expires_at, db_ip, db_session = result
-      db.execute("SELECT value FROM encryption_key LIMIT 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      try:
         answer = fernet.decrypt(answer).decode()
-      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+      except Exception:
+        log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "math"})
+        return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
+
+      ip_match = not db_ip or secrets.compare_digest(db_ip, ip or "")
+      session_match = not db_session or secrets.compare_digest(db_session, session_id or "")
+      if not ip_match or not session_match:
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "math", "ip": ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
       if attempts >= 5:
@@ -186,12 +189,15 @@ class MathCaptcha:
       if not db.fetchone():
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "math", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
-      if secrets.compare_digest(str(answer), str(user_answer)):
+      user_answer = str(user_answer).strip().lower()
+      answer = str(answer).strip().lower()
+      
+      if secrets.compare_digest(answer, user_answer):
         db.execute("DELETE FROM math WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "math", "ip": ip})
         return True
-      db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.execute("UPDATE math SET attempts = attempts + 1 WHERE id = ? AND attempts < 5", (self.id,))
       db.commit()
       log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "math", "ip": ip, "attempt": attempts + 1})
     return False
