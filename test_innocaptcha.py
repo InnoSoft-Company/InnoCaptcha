@@ -61,19 +61,19 @@ class TestTextCaptcha(unittest.TestCase):
 
   def test_create_sets_chars_max_6(self):
     self.captcha.create(['A', 'B', 'C', 'D', 'E', 'F', 'G'])
-    self.assertEqual(len(self.captcha.chars), 6)
+    self.assertTrue(self.captcha.verify('ABCDEF'))
 
   def test_create_uses_provided_chars(self):
     self.captcha.create('XYZ123')
-    self.assertEqual(self.captcha.chars, 'XYZ123')
+    self.assertTrue(self.captcha.verify('XYZ123'))
 
   def test_create_inserts_row_in_db(self):
-    self.captcha.create()
+    self.captcha.create('AABBCC')
     with sqlite3.connect(DB_PATH) as conn:
       row = conn.execute("SELECT id, answer FROM text WHERE id = ?", (self.captcha.id,)).fetchone()
     self.assertIsNotNone(row)
     self.assertEqual(row[0], self.captcha.id)
-    self.assertEqual(row[1], self.captcha.chars)
+    self.assertTrue(self.captcha.verify('AABBCC'))
 
   def test_save_writes_file(self):
     self.captcha.create()
@@ -87,8 +87,8 @@ class TestTextCaptcha(unittest.TestCase):
       if os.path.exists(path): os.unlink(path)
 
   def test_verify_correct_answer_returns_true(self):
-    self.captcha.create()
-    result = self.captcha.verify(self.captcha.chars)
+    self.captcha.create('HELLO')
+    result = self.captcha.verify('HELLO')
     self.assertTrue(result)
 
   def test_verify_wrong_answer_returns_false(self):
@@ -131,7 +131,7 @@ class TestAudioCaptcha(unittest.TestCase):
   def test_verify_correct_answer_returns_true(self):
     if not self.wav_available: self.skipTest("WAV files not present")
     self.captcha.create("ABCDEF")
-    result = self.captcha.verify(self.captcha.chars)
+    result = self.captcha.verify("ABCDEF")
     self.assertTrue(result)
 
 # ---------------------------------------------------------------------------
@@ -146,20 +146,23 @@ class TestMathCaptcha(unittest.TestCase):
 
   def setUp(self):
     self.captcha = self.MathCaptcha()
+    self.captcha.create()
+    q = self.captcha.question.replace('×', '*')
+    self.raw_answer = str(eval(q))
 
   def test_init_sets_question(self):
     self.assertIsNotNone(self.captcha.question)
     self.assertTrue(any(op in self.captcha.question for op in ['+', '-', '×', '*', '/']))
 
   def test_verify_correct_answer_returns_true(self):
-    result = self.captcha.verify(self.captcha.answer)
+    result = self.captcha.verify(self.raw_answer)
     self.assertTrue(result)
 
   def test_verify_returns_message_if_expired(self):
     with sqlite3.connect(DB_PATH) as conn:
       conn.execute("UPDATE math SET expires_at = datetime('now', '-1 minute') WHERE id = ?", (self.captcha.id,))
       conn.commit()
-    result = self.captcha.verify(self.captcha.answer)
+    result = self.captcha.verify(self.raw_answer)
     self.assertIsInstance(result, str)
 
 if __name__ == '__main__':

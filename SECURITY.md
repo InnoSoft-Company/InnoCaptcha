@@ -11,7 +11,7 @@ We take the security of **InnoCaptcha** seriously. Currently, the following vers
 ## Reporting a Vulnerability
 Please do not report security vulnerabilities through public GitHub issues. To protect the users of this library, we ask that you report vulnerabilities privately.
 
-1. Send a detailed email to: **support@innosoft.com**
+1. Send a detailed email to: **support.innosoft@midoghanam.site**
 2. Include a description of the vulnerability and steps to reproduce it.
 3. We will acknowledge your report within 48 hours and work on a fix as a priority.
 

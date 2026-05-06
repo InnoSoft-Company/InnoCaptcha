@@ -9,10 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Encryption of captcha answers before storing them in the database.
+- `INNOCAPTCHA_KEY` environment variable support for secure encryption key injection.
 
 ### Fixed
 - Stabilized encryption key handling and verification flow.
 - Corrected formatting issues in the LICENSE file.
+- Fixed a critical vulnerability where the encryption key was stored alongside the encrypted data.
+- Fixed an SQL injection vulnerability by validating table names.
+- Resolved race conditions in the attempt counter across all captcha types.
+- Thwarted potential timing attacks on IP and Session IDs by using constant-time comparison methods (`secrets.compare_digest`).
+- Fixed database connection leak bugs by implementing robust try/finally logic.
+- Prevented potential Memory Leaks by removing automated `threading.Thread` background cleanup jobs that ran per-instance. Cleanups are now processed synchronously and lazily on creation.
+- Eliminated an `AttributeError` by replacing `del self.chars` with `self.chars = None`.
+- Secured `ImageCaptcha` by implementing YOLO model caching, which drastically improves initialization times and memory footprints.
+- Rectified detection filtering in `ImageCaptcha` so it accurately selects detections matching the target class.
 
 ### Changed
 - Refactored `MathCaptcha.__init__` to remove side effects and unify the public API.

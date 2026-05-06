@@ -1,11 +1,19 @@
-import cv2, threading, os, secrets
+import cv2, os, secrets
 from ultralytics import YOLO
 from PIL import Image
 import numpy as np
-from .utils import DB, log_event
+from .utils import DB, log_event, get_encryption_key
 from cryptography.fernet import Fernet
 
 images_dir = os.path.join(os.path.dirname(__file__), 'data', 'images')
+
+_yolo_model = None
+def get_yolo_model():
+  global _yolo_model
+  if _yolo_model is None:
+    MODEL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'models', 'yolo11n.pt')
+    _yolo_model = YOLO(MODEL_PATH)
+  return _yolo_model
 
 class ImageCaptcha:
   def cleanup(self):
@@ -15,8 +23,7 @@ class ImageCaptcha:
 
   def __init__(self, lang='en'):
     self.lang = lang
-    MODEL_PATH = os.path.join(os.path.dirname(__file__), 'data', 'models', 'yolo11n.pt')
-    self.model = YOLO(MODEL_PATH)
+    self.model = get_yolo_model()
     classes = sorted(os.listdir(images_dir))
     if not classes:
       raise FileNotFoundError("No image classes found in data/images")
@@ -26,17 +33,20 @@ class ImageCaptcha:
     self.annotation_coordinates = []
     self.image = None
     self.id = None
-    threading.Thread(target=self.cleanup, daemon=True).start()
 
   def create(self, ip=None, session_id=None):
+    self.cleanup()
     self.id = secrets.token_hex(16)
     pil_img = Image.open(self.image_path).convert('RGB')
     img = np.array(pil_img)
     results = self.model(img)
+    target_cls = self.image_class.lower()
     for result in results:
-      for box in result.boxes.xyxy.cpu().numpy():
-        x1, y1, x2, y2 = map(int, box)
-        self.annotation_coordinates.append((x1, y1, x2, y2))
+      for box, cls_id in zip(result.boxes.xyxy.cpu().numpy(), result.boxes.cls.cpu().numpy()):
+        det_cls = result.names[int(cls_id)].lower()
+        if det_cls == target_cls or det_cls in target_cls or target_cls in det_cls:
+          x1, y1, x2, y2 = map(int, box)
+          self.annotation_coordinates.append((x1, y1, x2, y2))
     h, w = img.shape[:2]
     for i in range(1, 3):
       cv2.line(img, (i * w // 3, 0), (i * w // 3, h), (255, 0, 0), 2)
@@ -59,11 +69,9 @@ class ImageCaptcha:
           correct_grids.add(grid_num)
     answer = ",".join(map(str, sorted(correct_grids)))
     with DB() as db:
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        answer = fernet.encrypt(answer.encode())
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      answer = fernet.encrypt(answer.encode())
       db.execute("INSERT INTO image (id, answer, attempts, ip_address, session_id, created_at, expires_at) VALUES (?, ?, 0, ?, ?, CURRENT_TIMESTAMP, (datetime('now', '+5 minutes')))", 
                  (self.id, answer, ip, session_id))
       db.commit()
@@ -85,17 +93,17 @@ class ImageCaptcha:
       
       answer, attempts, expires_at, db_ip, db_session = result
 
-      db.execute("SELECT value FROM encryption_key limit 1")
-      key = db.fetchone()
-      if key:
-        fernet = Fernet(key[0])
-        try:
-          answer = fernet.decrypt(answer).decode()
-        except Exception:
-          log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "image"})
-          return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
+      key = get_encryption_key()
+      fernet = Fernet(key)
+      try:
+        answer = fernet.decrypt(answer).decode()
+      except Exception:
+        log_event("DECRYPT_ERROR", f"Failed to decrypt answer for {self.id}", {"module": "image"})
+        return "Captcha verification error" if self.lang == 'en' else "خطأ في التحقق"
       # Context Binding Validation (#5)
-      if (db_ip and ip and db_ip != ip) or (db_session and session_id and db_session != session_id):
+      ip_match = not db_ip or secrets.compare_digest(db_ip, ip or "")
+      session_match = not db_session or secrets.compare_digest(db_session, session_id or "")
+      if not ip_match or not session_match:
         log_event("VERIFY_REJECTED", f"Context mismatch for {self.id}", {"module": "image", "ip": ip, "db_ip": db_ip})
         return "Security context mismatch" if self.lang == 'en' else "خطأ في التحقق من المصدر"
 
@@ -109,13 +117,15 @@ class ImageCaptcha:
         log_event("VERIFY_REJECTED", f"Captcha expired: {self.id}", {"module": "image", "ip": ip})
         return "Captcha expired" if self.lang == 'en' else "انتهت صلاحية الكابتشا"
 
-      if secrets.compare_digest(str(user_input), str(answer)):
+      user_input_normalized = ",".join(sorted(set([x.strip() for x in str(user_input).split(',') if x.strip()])))
+      
+      if secrets.compare_digest(user_input_normalized, str(answer)):
         db.execute("DELETE FROM image WHERE id = ?", (self.id,))
         db.commit()
         log_event("VERIFY_SUCCESS", f"Captcha verified: {self.id}", {"module": "image", "ip": ip})
         return True
             
-      db.execute("UPDATE image SET attempts = attempts + 1 WHERE id = ?", (self.id,))
+      db.execute("UPDATE image SET attempts = attempts + 1 WHERE id = ? AND attempts < 5", (self.id,))
       db.commit()
       log_event("VERIFY_FAILED", f"Wrong answer for {self.id}", {"module": "image", "ip": ip, "attempt": attempts+1})
       return False

@@ -6,9 +6,10 @@ from cryptography.fernet import Fernet
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH  = os.path.join(BASE_DIR, 'data/dbs/captcha.db')
 LOG_DIR  = os.path.join(BASE_DIR, 'data/logs')
+SECRET_KEY_PATH = os.path.join(BASE_DIR, 'data/secret.key')
 
 # Ensure directories exist
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+os.makedirs(os.path.dirname(DB_PATH), mode=0o700, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Setup Logging
@@ -21,17 +22,41 @@ def log_event(event_type, message, metadata=None):
   entry = {"event": event_type, "msg": message, "meta": metadata or {}}
   logging.info(json.dumps(entry))
 
+def get_encryption_key():
+  key = os.environ.get('INNOCAPTCHA_KEY')
+  if key:
+    return key.encode() if isinstance(key, str) else key
+  
+  if os.path.exists(SECRET_KEY_PATH):
+    with open(SECRET_KEY_PATH, 'rb') as f:
+      return f.read().strip()
+  
+  new_key = Fernet.generate_key()
+  with open(SECRET_KEY_PATH, 'wb') as f:
+    f.write(new_key)
+  os.chmod(SECRET_KEY_PATH, 0o600)
+  return new_key
+
+ALLOWED_TABLES = {'text', 'audio', 'math', 'voice', 'image'}
+
 class DB:
   def __init__(self, db_path=None):
     self.db_path = db_path if db_path else DB_PATH
-    self.conn = sqlite3.connect(self.db_path)
-    self.cursor = self.conn.cursor()
-    self._initialize_schema()
+    self.conn = None
+    try:
+      self.conn = sqlite3.connect(self.db_path)
+      if os.path.exists(self.db_path):
+        os.chmod(self.db_path, 0o600)
+      self.cursor = self.conn.cursor()
+      self._initialize_schema()
+    except Exception as e:
+      if self.conn:
+        self.conn.close()
+      raise e
 
   def _initialize_schema(self):
     """Ensure tables exist with new security columns (ip_address, session_id)."""
-    tables = ['text', 'audio', 'math', 'voice', 'image']
-    for table in tables:
+    for table in ALLOWED_TABLES:
       self.cursor.execute(f"""
         CREATE TABLE IF NOT EXISTS {table} (
           id         TEXT PRIMARY KEY,
@@ -52,13 +77,8 @@ class DB:
         try: self.cursor.execute(f"ALTER TABLE {table} ADD COLUMN session_id TEXT")
         except sqlite3.OperationalError: pass
     
-    # Encryption key table
-    self.cursor.execute("""CREATE TABLE IF NOT EXISTS encryption_key (value TEXT)""")
-    self.cursor.execute("SELECT COUNT(*) FROM encryption_key")
-    if self.cursor.fetchone()[0] == 0:
-      key = Fernet.generate_key()
-      self.cursor.execute("INSERT INTO encryption_key (value) VALUES (?)", (key,))
     self.conn.commit()
+
   def __enter__(self): return self
 
   def __exit__(self, exc_type, exc_val, exc_tb):
@@ -69,3 +89,4 @@ class DB:
   def commit(self): self.conn.commit()
 
   def fetchone(self): return self.cursor.fetchone()
+
