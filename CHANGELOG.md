@@ -5,8 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.4.0](https://github.com/InnoSoft-Company/InnoCaptcha/compare/v2.3.0...v2.4.0) - 2026-05-06
+## [2.4.1](https://github.com/InnoSoft-Company/InnoCaptcha/compare/v2.4.0...v2.4.1) - 2026-05-21
 
+### Security
+- **Critical:** Removed sensitive files (`secret.key`, `captcha.db`, and logs) from Git tracking and updated `.gitignore`.
+- **Critical:** Fixed a Command Injection vulnerability in `UploadToGitHub.py` by replacing `os.system` with `subprocess.run`.
+- **Critical:** Replaced predictable `np.random` with cryptographically secure `secrets` module in `audio.py`.
+- **High:** Mitigated Path Traversal attacks by validating file extensions in all `.save()` methods across modules.
+- **High:** Added a 10MB file size limit to incoming audio data in `voice.py` to prevent DoS attacks.
+- **High:** Fixed Database Locking issues by enabling SQLite WAL mode and applying `check_same_thread=False` in `utils.py`.
+- **Medium:** Added database indexes (`expires_at`, `ip_address`) to speed up cleanup and querying.
+- **Medium:** Expanded character set in `text.py` and increased the number range in `math.py` to drastically improve entropy against automated solvers.
+- **Medium:** Removed the legacy `setup.py` and relied solely on `pyproject.toml` with pinned dependency versions.
+- **Medium:** Masked (hashed) User IP addresses before persisting them in the logs to protect PII.
+
+### Changed
+- Refactored `image.py` YOLO model loading to be lazy instead of loading during `__init__`.
+
+---
+
+## [2.4.0](https://github.com/InnoSoft-Company/InnoCaptcha/compare/v2.3.0...v2.4.0) - 2026-05-06
 ### Added
 - Encryption of captcha answers before storing them in the database.
 - `INNOCAPTCHA_KEY` environment variable support for secure encryption key injection.

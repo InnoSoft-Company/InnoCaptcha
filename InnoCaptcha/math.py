@@ -22,7 +22,7 @@ class MathCaptcha:
       font_files = [f for f in os.listdir(font_dir) if f.endswith(".ttf")]
       if font_files:
         return ImageFont.truetype(os.path.join(font_dir, secrets.choice(font_files)), size)
-    except:
+    except Exception:
       pass
     return ImageFont.load_default()
 
@@ -120,8 +120,8 @@ class MathCaptcha:
     self.id = secrets.token_hex(16)
     operators = {"+": operator.add, "-": operator.sub, "×": operator.mul}
     op = secrets.choice(["+", "-", "×"])
-    num1 = secrets.randbelow(10) + 1
-    num2 = secrets.randbelow(10) + 1
+    num1 = secrets.randbelow(99) + 1
+    num2 = secrets.randbelow(99) + 1
     if op == "-" and num1 < num2: num1, num2 = num2, num1
     self.question = f'{num1}{op}{num2}'
     raw_answer = str(operators[op](num1, num2))

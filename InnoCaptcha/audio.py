@@ -53,7 +53,8 @@ class AudioCaptcha:
       if not os.path.isfile(wav_path): raise FileNotFoundError(f"Missing audio file for character: '{char}' at {wav_path}")
       samples = read_wav(wav_path) 
       noise_scale = 0.005 + (secrets.randbelow(10) / 1000.0)
-      noise = np.random.uniform(-noise_scale, noise_scale, len(samples)).astype(np.float32)
+      rng = np.random.default_rng(secrets.randbits(128))
+      noise = rng.uniform(-noise_scale, noise_scale, len(samples)).astype(np.float32)
       char_audio = samples + noise
       factor  = 0.5 + (secrets.randbits(8) / 255 - 0.5) * 0.05
       new_len = max(1, int(len(samples) / factor))
@@ -69,6 +70,9 @@ class AudioCaptcha:
 
   def save(self, path):
     if self.audio is None: raise ValueError("No captcha created.")
+    path = os.path.realpath(path)
+    if not path.endswith('.wav'):
+      raise ValueError("Invalid file extension. Must be .wav")
     samples = np.clip(self.audio, -1.0, 1.0)
     pcm = (samples * 32767).astype(np.int16)
     with wave.open(path, 'wb') as wf:

@@ -23,13 +23,9 @@ class ImageCaptcha:
 
   def __init__(self, lang='en'):
     self.lang = lang
-    self.model = get_yolo_model()
-    classes = sorted(os.listdir(images_dir))
-    if not classes:
-      raise FileNotFoundError("No image classes found in data/images")
-    self.image_class = secrets.choice(classes)
-    d = os.path.join(images_dir, self.image_class)
-    self.image_path = os.path.join(d, secrets.choice(sorted(os.listdir(d))))
+    self.model = None
+    self.image_class = None
+    self.image_path = None
     self.annotation_coordinates = []
     self.image = None
     self.id = None
@@ -37,6 +33,16 @@ class ImageCaptcha:
   def create(self, ip=None, session_id=None):
     self.cleanup()
     self.id = secrets.token_hex(16)
+    
+    if self.model is None:
+      self.model = get_yolo_model()
+    classes = sorted(os.listdir(images_dir))
+    if not classes: raise FileNotFoundError("No image classes found in data/images")
+    self.image_class = secrets.choice(classes)
+    d = os.path.join(images_dir, self.image_class)
+    self.image_path = os.path.join(d, secrets.choice(sorted(os.listdir(d))))
+    self.annotation_coordinates = []
+
     pil_img = Image.open(self.image_path).convert('RGB')
     img = np.array(pil_img)
     results = self.model(img)
@@ -134,7 +140,12 @@ class ImageCaptcha:
     if self.image is None or self.id is None:
       raise ValueError("No captcha created.")
             
-    final_image = Image.fromarray(self.image)
     if not path:
       path = "captcha_image.png"
+      
+    path = os.path.realpath(path)
+    if not path.endswith(('.png', '.jpg')):
+      raise ValueError("Invalid file extension. Must be .png or .jpg")
+      
+    final_image = Image.fromarray(self.image)
     final_image.save(path)

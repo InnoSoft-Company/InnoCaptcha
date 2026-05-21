@@ -4,7 +4,7 @@ from bidi.algorithm import get_display
 from PIL.ImageFilter import SMOOTH
 from PIL.Image import Resampling
 from PIL import Image, ImageFont
-import os, secrets, threading
+import os, secrets, threading, logging
 from PIL.ImageDraw import Draw
 import arabic_reshaper
 
@@ -14,7 +14,7 @@ def get_font(size=40):
   try:
     fonts = sorted([f for f in os.listdir(font_dir) if f.endswith(".ttf")])
     if fonts: return ImageFont.truetype(os.path.join(font_dir, secrets.choice(fonts)), size)
-  except Exception: pass
+  except Exception as e: logging.warning(f"Could not load font: {e}")
   return ImageFont.load_default()
 
 class TextCaptcha():
@@ -47,7 +47,7 @@ class TextCaptcha():
     self.image = Image.new('RGB', (self.image_width, self.image_height), self.background)
     self.draw = Draw(self.image)
     self.id = secrets.token_hex(16)
-    if not chars: chars = [secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
+    if not chars: chars = [secrets.choice('abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6)]
     self.chars = "".join(chars[0:6])
     key = get_encryption_key()
     fernet = Fernet(key)
@@ -96,12 +96,13 @@ class TextCaptcha():
     for im in self.char_images:
       self.image.paste(im, (x, (self.image_height - im.size[1]) // 2), im)
       x += im.size[0] + int(self.image_width * 0.05)
-    self.image = self.image.filter(SMOOTH)
     self.chars = None  # Remove plaintext answer from memory
     return self.id
 
   def save(self, path):
     if self.image is None: raise ValueError("No captcha created.")
+    path = os.path.realpath(path)
+    if not path.endswith(('.png', '.jpg')): raise ValueError("Invalid file extension. Must be .png or .jpg")
     self.image.save(path)
 
   def verify(self, user_input, ip=None, session_id=None):

@@ -84,6 +84,9 @@ class VoiceCaptcha():
         return "Captcha expired" if self.lang_code == 'en' else "انتهت صلاحية الكابتشا"
       transcript = None
       if audio_bytes:
+        if len(audio_bytes) > 10 * 1024 * 1024: # 10 MB limit
+          log_event("VERIFY_REJECTED", f"Audio file too large", {"module": "voice", "ip": ip})
+          return "Audio file too large. Max 10MB."
         try:
           audio = AudioSegment.from_file(io.BytesIO(audio_bytes))
           audio = normalize(audio)

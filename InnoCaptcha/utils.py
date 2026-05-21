@@ -1,4 +1,4 @@
-import sqlite3, os, logging, json
+import sqlite3, os, logging, json, platform, hashlib
 from datetime import datetime
 from cryptography.fernet import Fernet
 
@@ -13,13 +13,30 @@ os.makedirs(os.path.dirname(DB_PATH), mode=0o700, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # Setup Logging
+_logging_initialized = False
 def setup_logging():
+  global _logging_initialized
+  if _logging_initialized: return
   log_file = os.path.join(LOG_DIR, f"innocaptcha_{datetime.now().strftime('%Y-%m-%d')}.log")
-  logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+  from logging.handlers import RotatingFileHandler
+  handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
+  formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+  handler.setFormatter(formatter)
+  logger = logging.getLogger()
+  logger.setLevel(logging.INFO)
+  logger.addHandler(handler)
+  _logging_initialized = True
+
+def mask_ip(ip):
+  if not ip: return None
+  return hashlib.sha256(str(ip).encode()).hexdigest()[:16]
 
 def log_event(event_type, message, metadata=None):
   setup_logging()
-  entry = {"event": event_type, "msg": message, "meta": metadata or {}}
+  meta_copy = dict(metadata) if metadata else {}
+  if 'ip' in meta_copy: meta_copy['ip'] = mask_ip(meta_copy['ip'])
+  if 'db_ip' in meta_copy: del meta_copy['db_ip']
+  entry = {"event": event_type, "msg": message, "meta": meta_copy}
   logging.info(json.dumps(entry))
 
 def get_encryption_key():
@@ -34,7 +51,8 @@ def get_encryption_key():
   new_key = Fernet.generate_key()
   with open(SECRET_KEY_PATH, 'wb') as f:
     f.write(new_key)
-  os.chmod(SECRET_KEY_PATH, 0o600)
+  if platform.system() != 'Windows':
+    os.chmod(SECRET_KEY_PATH, 0o600)
   return new_key
 
 ALLOWED_TABLES = {'text', 'audio', 'math', 'voice', 'image'}
@@ -44,10 +62,11 @@ class DB:
     self.db_path = db_path if db_path else DB_PATH
     self.conn = None
     try:
-      self.conn = sqlite3.connect(self.db_path)
-      if os.path.exists(self.db_path):
+      self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+      if os.path.exists(self.db_path) and platform.system() != 'Windows':
         os.chmod(self.db_path, 0o600)
       self.cursor = self.conn.cursor()
+      self.cursor.execute("PRAGMA journal_mode=WAL;")
       self._initialize_schema()
     except Exception as e:
       if self.conn:
@@ -68,6 +87,8 @@ class DB:
           expires_at DATETIME
         )
       """)
+      self.cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_expires ON {table}(expires_at);")
+      self.cursor.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_ip ON {table}(ip_address);")
       self.cursor.execute(f"PRAGMA table_info({table})")
       columns = [row[1].lower() for row in self.cursor.fetchall()]
       if 'ip_address' not in columns:

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "requests"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -27,7 +27,7 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
     "Typing :: Typed",
 ]
-dependencies = ["Pillow", "ultralytics", "scipy", "cryptography", "numpy", "opencv-python", "requests", "arabic-reshaper", "python-bidi", "pydub", "SpeechRecognition"]
+dependencies = ["Pillow>=10.0.0", "ultralytics", "scipy", "cryptography>=41.0", "numpy", "opencv-python", "arabic-reshaper", "python-bidi", "pydub", "SpeechRecognition"]
 
 [project.urls]
 "Source Code" = "https://github.com/InnoSoft-Company/InnoCaptcha"

@@ -4,3 +4,12 @@ __pycache__/
 .git/
 .idea/
 *.sqlite3
+
+# Security - must add
+*.key
+*.db
+*.log
+data/logs/
+data/dbs/
+secret.key
+UploadToGitHub.py
